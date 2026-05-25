@@ -6,8 +6,9 @@ from .models import ServiceRequest
 from .serializers import ServiceRequestSerializer
 
 class ServiceRequestViewSet(viewsets.ModelViewSet):
-    queryset = ServiceRequest.objects.all().order_by('-request_date')
+    queryset = ServiceRequest.objects.all()
     serializer_class = ServiceRequestSerializer
+    lookup_field = 'request_id' 
 
 from django.http import JsonResponse
 from .models import Notification

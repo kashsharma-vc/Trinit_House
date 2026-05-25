@@ -1,19 +1,20 @@
 from django.db import models
-from setups.models import Category
+from setups.models import Category, Compressor, Workshop  # Exact imports
 
 class InventoryItem(models.Model):
+    sku = models.CharField(max_length=50, unique=True, help_text="Unique Item Code/SKU", blank=True, null=True)
     name = models.CharField(max_length=200)
     
-    # Links to the Category master you built earlier
+    # Linked exactly to your setup models
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='inventory_items')
+    compressor = models.ForeignKey(Compressor, on_delete=models.SET_NULL, null=True, related_name='inventory_compressors')
+    workshop = models.ForeignKey(Workshop, on_delete=models.SET_NULL, null=True, related_name='inventory_items_location')
     
-    compressor_type = models.CharField(max_length=150)
+    vendor = models.CharField(max_length=200, blank=True, null=True)
     current_stock = models.IntegerField(default=0)
     safety_stock = models.IntegerField(default=0)
-    vendor = models.CharField(max_length=200)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
-    # We don't need to save "status" to the database. 
-    # We can calculate it on the fly based on current vs safety stock!
     @property
     def status(self):
         if self.current_stock <= 0:
@@ -23,4 +24,4 @@ class InventoryItem(models.Model):
         return "safe"
 
     def __str__(self):
-        return self.name
+        return f"{self.sku} - {self.name}" if self.sku else self.name

@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { API_BASE_URL } from "@/lib/api";
 import {
   ChevronLeft,
   Check,
-  Circle,
   Camera,
   Clock,
   User,
@@ -23,7 +23,6 @@ import {
   Search,
   Cog,
   Sparkles,
-  ClipboardCheck,
   FlaskConical,
   ShieldCheck,
   Timer,
@@ -36,6 +35,7 @@ import {
   Eye,
   FileCheck,
   Shield,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useParams } from "react-router-dom";
@@ -45,99 +45,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
-// Sample request data (matching Requests.tsx)
-const requestsData: Record<string, {
-  id: string;
-  date: string;
-  zone: string;
-  workshop: string;
-  type: string;
-  compressor: string;
-  priority: string;
-  status: string;
-  expectedDate: string;
-  slaTat: string;
-  daysRemaining: number;
-  serialNumber: string;
-  model: string;
-}> = {
-  "REQ-2024-0456": {
-    id: "REQ-2024-0456",
-    date: "2024-01-28",
-    zone: "Northern",
-    workshop: "Delhi Workshop",
-    type: "Repair",
-    compressor: "ELGi W-Type",
-    priority: "High",
-    status: "Open",
-    expectedDate: "2024-02-11",
-    slaTat: "14 days",
-    daysRemaining: 14,
-    serialNumber: "ELG-W-2024-1234",
-    model: "15HP",
-  },
-  "REQ-2024-0455": {
-    id: "REQ-2024-0455",
-    date: "2024-01-27",
-    zone: "Southern",
-    workshop: "Chennai Workshop",
-    type: "Inspection",
-    compressor: "ELGi 15HP",
-    priority: "Medium",
-    status: "In Progress",
-    expectedDate: "2024-02-10",
-    slaTat: "14 days",
-    daysRemaining: 8,
-    serialNumber: "ELG-15HP-2023-5678",
-    model: "15HP Industrial",
-  },
-  "REQ-2024-0454": {
-    id: "REQ-2024-0454",
-    date: "2024-01-26",
-    zone: "Western",
-    workshop: "Mumbai Workshop",
-    type: "Warranty",
-    compressor: "Reciprocating",
-    priority: "Low",
-    status: "Closed",
-    expectedDate: "2024-02-05",
-    slaTat: "10 days",
-    daysRemaining: 0,
-    serialNumber: "REC-2022-9012",
-    model: "5HP Standard",
-  },
-  "REQ-2024-0453": {
-    id: "REQ-2024-0453",
-    date: "2024-01-25",
-    zone: "Eastern",
-    workshop: "Kolkata Workshop",
-    type: "Repair",
-    compressor: "Screw Type",
-    priority: "High",
-    status: "Open",
-    expectedDate: "2024-02-08",
-    slaTat: "14 days",
-    daysRemaining: 5,
-    serialNumber: "SCR-2023-3456",
-    model: "20HP Industrial",
-  },
-  "REQ-2024-0452": {
-    id: "REQ-2024-0452",
-    date: "2024-01-24",
-    zone: "Central",
-    workshop: "Bhopal Workshop",
-    type: "Inspection",
-    compressor: "ELGi W-Type",
-    priority: "Medium",
-    status: "In Progress",
-    expectedDate: "2024-02-07",
-    slaTat: "14 days",
-    daysRemaining: 3,
-    serialNumber: "ELG-W-2023-7890",
-    model: "10HP",
-  },
-};
-
 // Enhanced checklist item with detailed data
 interface ChecklistItemData {
   id: number;
@@ -145,7 +52,6 @@ interface ChecklistItemData {
   completed: boolean;
   note?: string;
   attachmentLabel?: string;
-  // Completed data for view
   completedBy?: string;
   completedAt?: string;
   laborTime?: string;
@@ -177,650 +83,8 @@ interface SopStage {
   sparesInfo?: string;
 }
 
-// Enhanced SOP Stages with new detailed checklists for REQ-2024-0454
+// Default stages for all requests
 const getSopStagesForRequest = (requestId: string): SopStage[] => {
-  if (requestId === "REQ-2024-0454") {
-    return [
-      {
-        id: 1,
-        name: "Pre-Inspection",
-        icon: "🟢",
-        purpose: "Ensure safety compliance before any physical handling",
-        status: "completed",
-        stageLock: "Transit stage locked until all items complete",
-        checklist: [
-          { 
-            id: 1, 
-            text: "Verify lifting points condition", 
-            completed: true, 
-            note: "Visual check as per SOP",
-            attachmentLabel: "Pre-lift photos, SOP reference",
-            completedBy: "Suresh Verma", 
-            completedAt: "26 Jan, 08:30 AM", 
-            laborTime: "12 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Lifting points inspected - all secure"
-          },
-          { 
-            id: 2, 
-            text: "Check lifting equipment certification validity", 
-            completed: true, 
-            note: "Certificate number & expiry verified",
-            attachmentLabel: "Safety certificate",
-            completedBy: "Suresh Verma", 
-            completedAt: "26 Jan, 08:45 AM", 
-            laborTime: "8 mins",
-            documentName: "lifting_certificate_jan2024.pdf"
-          },
-          { 
-            id: 3, 
-            text: "Inspect slings, hooks, shackles", 
-            completed: true, 
-            note: "Wear and damage check",
-            attachmentLabel: "Inspection photos",
-            completedBy: "Suresh Verma", 
-            completedAt: "26 Jan, 09:00 AM", 
-            laborTime: "18 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "All slings and hooks in good condition, certified for 2-ton load"
-          },
-          { 
-            id: 4, 
-            text: "Confirm PPE compliance", 
-            completed: true, 
-            note: "Helmet, gloves, shoes verified",
-            attachmentLabel: "PPE compliance photo",
-            completedBy: "Suresh Verma", 
-            completedAt: "26 Jan, 09:10 AM", 
-            laborTime: "5 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Full PPE compliance - helmet, gloves, safety boots"
-          },
-          { 
-            id: 5, 
-            text: "Verify load weight vs lifting capacity", 
-            completed: true, 
-            note: "Load rating matched",
-            attachmentLabel: "Load chart / document",
-            completedBy: "Suresh Verma", 
-            completedAt: "26 Jan, 09:20 AM", 
-            laborTime: "10 mins",
-            documentName: "weight_verification_report.pdf"
-          },
-          { 
-            id: 6, 
-            text: "Capture pre-inspection safety record", 
-            completed: true, 
-            attachmentLabel: "Safety document / photos",
-            completedBy: "Suresh Verma", 
-            completedAt: "26 Jan, 09:35 AM", 
-            laborTime: "15 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Equipment ready for lifting - all safety checks passed",
-            documentName: "pre_inspection_form_0454.pdf"
-          },
-        ],
-        laborTime: "1h 8m",
-        technician: "Suresh Verma",
-        completedAt: "26 Jan 2024, 09:35 AM",
-      },
-      {
-        id: 2,
-        name: "Transit",
-        icon: "🚚",
-        purpose: "Ensure safe and traceable transport",
-        status: "completed",
-        stageLock: "Receiving stage locked until all items complete",
-        checklist: [
-          { 
-            id: 1, 
-            text: "Verify dispatch details", 
-            completed: true, 
-            note: "Dispatch ID and date confirmed",
-            attachmentLabel: "Dispatch document",
-            completedBy: "Vikram Patel", 
-            completedAt: "26 Jan, 10:00 AM", 
-            laborTime: "8 mins",
-            documentName: "dispatch_log_0454.pdf"
-          },
-          { 
-            id: 2, 
-            text: "Confirm transport vehicle suitability", 
-            completed: true, 
-            note: "Vehicle type approved",
-            attachmentLabel: "Vehicle photo",
-            completedBy: "Vikram Patel", 
-            completedAt: "26 Jan, 10:15 AM", 
-            laborTime: "10 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Vehicle MH-02-AB-1234 inspected and cleared"
-          },
-          { 
-            id: 3, 
-            text: "Document handling instructions", 
-            completed: true, 
-            note: "Fragile / tilt instructions",
-            attachmentLabel: "Instruction sheet",
-            completedBy: "Vikram Patel", 
-            completedAt: "26 Jan, 10:30 AM", 
-            laborTime: "12 mins",
-            documentName: "handling_instructions.pdf"
-          },
-          { 
-            id: 4, 
-            text: "Record expected arrival", 
-            completed: true, 
-            note: "ETA logged",
-            attachmentLabel: "Transport manifest",
-            completedBy: "Vikram Patel", 
-            completedAt: "26 Jan, 11:00 AM", 
-            laborTime: "5 mins",
-            documentName: "transport_manifest_0454.pdf"
-          },
-        ],
-        laborTime: "35m",
-        technician: "Vikram Patel",
-        completedAt: "26 Jan 2024, 11:00 AM",
-      },
-      {
-        id: 3,
-        name: "Receiving",
-        icon: "🟢",
-        purpose: "Confirm item integrity on arrival",
-        status: "completed",
-        stageLock: "Inspection stage locked until all items complete",
-        checklist: [
-          { 
-            id: 1, 
-            text: "Verify delivery challan", 
-            completed: true, 
-            note: "Document matched",
-            attachmentLabel: "Delivery challan",
-            completedBy: "Anita Desai", 
-            completedAt: "26 Jan, 02:30 PM", 
-            laborTime: "12 mins",
-            documentName: "delivery_challan_0454.pdf"
-          },
-          { 
-            id: 2, 
-            text: "Match serial / DWL number", 
-            completed: true, 
-            note: "Numbers verified",
-            attachmentLabel: "Nameplate photo",
-            completedBy: "Anita Desai", 
-            completedAt: "26 Jan, 02:45 PM", 
-            laborTime: "10 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Serial number REC-2022-9012 verified and matched"
-          },
-          { 
-            id: 3, 
-            text: "Inspect packaging condition", 
-            completed: true, 
-            note: "Damage check",
-            attachmentLabel: "Packaging photos",
-            completedBy: "Anita Desai", 
-            completedAt: "26 Jan, 03:00 PM", 
-            laborTime: "15 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "No visible damage, packaging intact"
-          },
-          { 
-            id: 4, 
-            text: "Check for transport damage", 
-            completed: true, 
-            note: "Visual inspection notes",
-            attachmentLabel: "Damage photos",
-            completedBy: "Anita Desai", 
-            completedAt: "26 Jan, 03:15 PM", 
-            laborTime: "20 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "No transport damage detected"
-          },
-          { 
-            id: 5, 
-            text: "Create & link job card", 
-            completed: true, 
-            note: "Job card ID generated",
-            completedBy: "Anita Desai", 
-            completedAt: "26 Jan, 03:40 PM", 
-            laborTime: "18 mins",
-            documentName: "job_card_JC-MUM-2024-0454.pdf"
-          },
-        ],
-        laborTime: "1h 15m",
-        technician: "Anita Desai",
-        completedAt: "26 Jan 2024, 03:40 PM",
-      },
-      {
-        id: 4,
-        name: "Inspection",
-        icon: "🔵",
-        purpose: "Identify faults and scope of work",
-        status: "completed",
-        stageLock: "Disassembly stage locked until all items complete",
-        checklist: [
-          { 
-            id: 1, 
-            text: "Perform visual inspection", 
-            completed: true, 
-            note: "External condition noted",
-            attachmentLabel: "Inspection photos",
-            completedBy: "Mahesh Kulkarni", 
-            completedAt: "27 Jan, 09:00 AM", 
-            laborTime: "35 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Visual inspection complete - valve plate showing wear marks"
-          },
-          { 
-            id: 2, 
-            text: "Check leaks / abnormal noise", 
-            completed: true, 
-            note: "Observations recorded",
-            attachmentLabel: "Evidence images",
-            completedBy: "Mahesh Kulkarni", 
-            completedAt: "27 Jan, 09:40 AM", 
-            laborTime: "30 mins",
-            documentName: "noise_analysis_report.pdf"
-          },
-          { 
-            id: 3, 
-            text: "Measure key parameters", 
-            completed: true, 
-            note: "Values recorded",
-            attachmentLabel: "Measurement sheet",
-            completedBy: "Mahesh Kulkarni", 
-            completedAt: "27 Jan, 10:15 AM", 
-            laborTime: "25 mins",
-            documentName: "operational_params_0454.pdf"
-          },
-          { 
-            id: 4, 
-            text: "Assign technician", 
-            completed: true, 
-            note: "Technician confirmed",
-            completedBy: "Mahesh Kulkarni", 
-            completedAt: "27 Jan, 11:00 AM", 
-            laborTime: "10 mins"
-          },
-        ],
-        laborTime: "1h 40m",
-        technician: "Mahesh Kulkarni",
-        completedAt: "27 Jan 2024, 11:00 AM",
-      },
-      {
-        id: 5,
-        name: "Disassembly",
-        icon: "⚪",
-        purpose: "Safe and traceable dismantling",
-        status: "completed",
-        stageLock: "Cleaning stage locked until all items complete",
-        checklist: [
-          { 
-            id: 1, 
-            text: "Disconnect electrical connections", 
-            completed: true, 
-            note: "Isolation confirmed",
-            attachmentLabel: "Safety photo",
-            completedBy: "Ravi Nair", 
-            completedAt: "27 Jan, 01:00 PM", 
-            laborTime: "25 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "All electrical connections safely disconnected and labeled"
-          },
-          { 
-            id: 2, 
-            text: "Remove covers / housing", 
-            completed: true, 
-            note: "Steps followed",
-            attachmentLabel: "Disassembly photos",
-            completedBy: "Ravi Nair", 
-            completedAt: "27 Jan, 01:30 PM", 
-            laborTime: "30 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Housing cover removed - 12 bolts extracted"
-          },
-          { 
-            id: 3, 
-            text: "Extract internal assemblies", 
-            completed: true, 
-            note: "Parts identified",
-            attachmentLabel: "Assembly photos",
-            completedBy: "Ravi Nair", 
-            completedAt: "27 Jan, 02:30 PM", 
-            laborTime: "55 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Piston and valve assemblies extracted carefully"
-          },
-          { 
-            id: 4, 
-            text: "Tag and document removed parts", 
-            completed: true, 
-            note: "Part IDs recorded",
-            attachmentLabel: "Parts list",
-            completedBy: "Ravi Nair", 
-            completedAt: "27 Jan, 03:30 PM", 
-            laborTime: "45 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "All 24 parts tagged with unique identifiers",
-            documentName: "parts_inventory_0454.pdf"
-          },
-        ],
-        laborTime: "2h 35m",
-        technician: "Ravi Nair",
-        completedAt: "27 Jan 2024, 03:30 PM",
-      },
-      {
-        id: 6,
-        name: "Cleaning",
-        icon: "🧼",
-        purpose: "Prepare parts for accurate inspection",
-        status: "completed",
-        stageLock: "Parts Inspection stage locked until all items complete",
-        trackConsumables: true,
-        consumablesInfo: "Petrol: 2.5L, Industrial Solvent: 1L",
-        checklist: [
-          { 
-            id: 1, 
-            text: "Select approved cleaning method", 
-            completed: true, 
-            note: "Method as per SOP",
-            completedBy: "Deepak Sharma", 
-            completedAt: "28 Jan, 09:00 AM", 
-            laborTime: "10 mins"
-          },
-          { 
-            id: 2, 
-            text: "Record cleaning liquid used", 
-            completed: true, 
-            note: "Petrol / Diesel / Solvent",
-            attachmentLabel: "Chemical usage record",
-            completedBy: "Deepak Sharma", 
-            completedAt: "28 Jan, 09:15 AM", 
-            laborTime: "8 mins",
-            selectedValue: "Industrial Solvent + Petrol"
-          },
-          { 
-            id: 3, 
-            text: "Record quantity consumed", 
-            completed: true, 
-            consumableInfo: "Consumable panel (read-only, inventory linked)",
-            completedBy: "Deepak Sharma", 
-            completedAt: "28 Jan, 09:25 AM", 
-            laborTime: "5 mins",
-            inputValue: "3.5 Liters total"
-          },
-          { 
-            id: 4, 
-            text: "Verify cleanliness & drying", 
-            completed: true, 
-            note: "Inspection notes",
-            attachmentLabel: "Cleaning photos",
-            completedBy: "Deepak Sharma", 
-            completedAt: "28 Jan, 11:00 AM", 
-            laborTime: "95 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "All components cleaned and dried completely"
-          },
-        ],
-        laborTime: "1h 58m",
-        technician: "Deepak Sharma",
-        completedAt: "28 Jan 2024, 11:00 AM",
-      },
-      {
-        id: 7,
-        name: "Parts Inspection",
-        icon: "🔍",
-        purpose: "Decide Reuse / Repair / Replace",
-        status: "completed",
-        stageLock: "Assembly stage locked until all items complete",
-        trackSpares: true,
-        sparesInfo: "Piston Ring Set, Valve Plate, Gasket Kit",
-        checklist: [
-          { 
-            id: 1, 
-            text: "Measure dimensional tolerances", 
-            completed: true, 
-            note: "Values logged",
-            attachmentLabel: "Measurement images",
-            completedBy: "Mahesh Kulkarni", 
-            completedAt: "28 Jan, 01:00 PM", 
-            laborTime: "35 mins",
-            documentName: "tolerance_measurements_0454.pdf"
-          },
-          { 
-            id: 2, 
-            text: "Check wear limits vs SOP", 
-            completed: true, 
-            note: "Pass / fail noted",
-            completedBy: "Mahesh Kulkarni", 
-            completedAt: "28 Jan, 01:40 PM", 
-            laborTime: "30 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Wear comparison chart - piston rings exceed limit"
-          },
-          { 
-            id: 3, 
-            text: "Inspect seals & gaskets", 
-            completed: true, 
-            note: "Condition recorded",
-            attachmentLabel: "Part photos",
-            completedBy: "Mahesh Kulkarni", 
-            completedAt: "28 Jan, 02:00 PM", 
-            laborTime: "20 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Seals showing cracks, gaskets worn - replacement needed"
-          },
-          { 
-            id: 4, 
-            text: "Mark part decision", 
-            completed: true, 
-            note: "Reuse / Repair / Replace",
-            completedBy: "Mahesh Kulkarni", 
-            completedAt: "28 Jan, 02:30 PM", 
-            laborTime: "15 mins",
-            selectedValue: "12 Reuse, 3 Replace, 2 Repair"
-          },
-          { 
-            id: 5, 
-            text: "Identify required spares / tools", 
-            completed: true, 
-            spareInfo: "Spares panel (read-only)",
-            note: "PO auto-triggered if unavailable",
-            completedBy: "Mahesh Kulkarni", 
-            completedAt: "28 Jan, 03:00 PM", 
-            laborTime: "20 mins",
-            documentName: "spare_parts_order.pdf"
-          },
-        ],
-        laborTime: "2h 0m",
-        technician: "Mahesh Kulkarni",
-        completedAt: "28 Jan 2024, 03:00 PM",
-      },
-      {
-        id: 8,
-        name: "Assembly",
-        icon: "🛠️",
-        purpose: "Restore equipment to SOP standards",
-        status: "completed",
-        stageLock: "Testing stage locked until all items complete",
-        trackConsumables: true,
-        trackSpares: true,
-        consumablesInfo: "Compressor Oil: 1.5L, Grease: 200g",
-        sparesInfo: "Piston Ring Set, Valve Plate, Gasket Kit installed",
-        checklist: [
-          { 
-            id: 1, 
-            text: "Verify repair plan", 
-            completed: true, 
-            note: "Plan approved",
-            completedBy: "Ravi Nair", 
-            completedAt: "29 Jan, 09:00 AM", 
-            laborTime: "15 mins",
-            documentName: "repair_plan_approved_0454.pdf"
-          },
-          { 
-            id: 2, 
-            text: "Install correct spare parts", 
-            completed: true, 
-            spareInfo: "Parts used (inventory linked)",
-            completedBy: "Ravi Nair", 
-            completedAt: "29 Jan, 10:30 AM", 
-            laborTime: "85 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "New parts installed as per warranty"
-          },
-          { 
-            id: 3, 
-            text: "Apply torque as per SOP", 
-            completed: true, 
-            note: "Torque values recorded",
-            completedBy: "Ravi Nair", 
-            completedAt: "29 Jan, 11:15 AM", 
-            laborTime: "35 mins",
-            documentName: "torque_log.pdf"
-          },
-          { 
-            id: 4, 
-            text: "Apply lubrication", 
-            completed: true, 
-            note: "Oil / grease type",
-            attachmentLabel: "Lubrication record",
-            completedBy: "Ravi Nair", 
-            completedAt: "29 Jan, 11:45 AM", 
-            laborTime: "25 mins",
-            selectedValue: "SAE 30 Compressor Oil, Lithium Grease"
-          },
-          { 
-            id: 5, 
-            text: "Verify fitment", 
-            completed: true, 
-            attachmentLabel: "Assembly photos",
-            completedBy: "Ravi Nair", 
-            completedAt: "29 Jan, 12:30 PM", 
-            laborTime: "30 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "All components fitted and aligned correctly"
-          },
-        ],
-        laborTime: "3h 10m",
-        technician: "Ravi Nair",
-        completedAt: "29 Jan 2024, 12:30 PM",
-      },
-      {
-        id: 9,
-        name: "Testing",
-        icon: "🧪",
-        purpose: "Ensure functional reliability",
-        status: "completed",
-        stageLock: "QC stage locked until all items complete",
-        trackConsumables: true,
-        consumablesInfo: "Test bench consumables logged",
-        checklist: [
-          { 
-            id: 1, 
-            text: "Verify test bench setup", 
-            completed: true, 
-            note: "Setup confirmed",
-            completedBy: "Amit Joshi", 
-            completedAt: "29 Jan, 02:00 PM", 
-            laborTime: "30 mins",
-            photoUrl: "/placeholder.svg",
-            photoDescription: "Test bench configured for 5HP reciprocating compressor"
-          },
-          { 
-            id: 2, 
-            text: "Execute functional tests", 
-            completed: true, 
-            note: "Test steps recorded",
-            completedBy: "Amit Joshi", 
-            completedAt: "29 Jan, 02:45 PM", 
-            laborTime: "40 mins",
-            documentName: "functional_test_results.pdf"
-          },
-          { 
-            id: 3, 
-            text: "Record performance readings", 
-            completed: true, 
-            attachmentLabel: "Test report",
-            completedBy: "Amit Joshi", 
-            completedAt: "29 Jan, 03:15 PM", 
-            laborTime: "25 mins",
-            inputValue: "Pressure: 125 PSI, RPM: 1450, Temp: 68°C",
-            documentName: "test_readings_0454.pdf"
-          },
-          { 
-            id: 4, 
-            text: "Confirm parameters within limits", 
-            completed: true, 
-            note: "Pass / fail noted",
-            completedBy: "Amit Joshi", 
-            completedAt: "29 Jan, 03:45 PM", 
-            laborTime: "18 mins"
-          },
-        ],
-        laborTime: "1h 53m",
-        technician: "Amit Joshi",
-        completedAt: "29 Jan 2024, 03:45 PM",
-      },
-      {
-        id: 10,
-        name: "QC Checklist",
-        icon: "🧾",
-        purpose: "Audit, compliance, and closure readiness",
-        status: "completed",
-        stageLock: "Invoice & Closure unlock only after QC approval",
-        checklist: [
-          { 
-            id: 1, 
-            text: "Verify job card & documents", 
-            completed: true, 
-            attachmentLabel: "Job card",
-            completedBy: "Supervisor - Nitin Mehta", 
-            completedAt: "30 Jan, 09:30 AM", 
-            laborTime: "35 mins",
-            documentName: "job_card_final.pdf"
-          },
-          { 
-            id: 2, 
-            text: "Confirm SOP adherence", 
-            completed: true, 
-            note: "Audit notes",
-            completedBy: "Supervisor - Nitin Mehta", 
-            completedAt: "30 Jan, 10:15 AM", 
-            laborTime: "40 mins",
-            documentName: "sop_adherence_check.pdf"
-          },
-          { 
-            id: 3, 
-            text: "Review inspection, assembly & test records", 
-            completed: true, 
-            attachmentLabel: "Consolidated reports",
-            completedBy: "Supervisor - Nitin Mehta", 
-            completedAt: "30 Jan, 10:45 AM", 
-            laborTime: "25 mins",
-            documentName: "consolidated_reports.pdf"
-          },
-          { 
-            id: 4, 
-            text: "Supervisor / QA approval", 
-            completed: true, 
-            note: "Approval recorded",
-            attachmentLabel: "QC certificate",
-            completedBy: "Supervisor - Nitin Mehta", 
-            completedAt: "30 Jan, 11:30 AM", 
-            laborTime: "35 mins",
-            documentName: "qc_certificate_0454.pdf"
-          },
-        ],
-        laborTime: "2h 15m",
-        technician: "Supervisor - Nitin Mehta",
-        completedAt: "30 Jan 2024, 11:30 AM",
-      },
-    ];
-  }
-
-  // Default stages for other requests
   return [
     {
       id: 1,
@@ -1034,7 +298,47 @@ export default function RequestView() {
   const [expandedStage, setExpandedStage] = useState<number | null>(1);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
-  const requestData = id ? requestsData[id] : null;
+  // NEW: State for real API data
+  const [requestData, setRequestData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // NEW: Fetch data directly from the Django backend
+  useEffect(() => {
+    const fetchRequestDetails = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/operations/requests/${id}/`);
+        if (!response.ok) throw new Error("Request not found");
+        
+        const data = await response.json();
+        
+        // Map the backend data to match your UI's expected format
+        setRequestData({
+          id: data.request_id || data.id,
+          date: data.request_date || data.created_on?.split("T")[0] || "N/A",
+          zone: data.zone_name || "Unassigned",
+          workshop: data.workshop_name || "Unassigned",
+          type: data.request_type || "Repair",
+          compressor: data.compressor_type || "Unknown",
+          priority: data.priority || "Medium",
+          status: data.status || "Open",
+          expectedDate: data.expected_date ? data.expected_date.split("T")[0] : "TBD",
+          slaTat: "14 days", // Mocked for UI until backend supports it
+          daysRemaining: 14, // Mocked for UI until backend supports it
+          serialNumber: data.serial_number || "N/A",
+          model: data.compressor_model || "N/A",
+        });
+      } catch (err) {
+        console.error(err);
+        setRequestData(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (id) fetchRequestDetails();
+  }, [id]);
+
   const sopStages = getSopStagesForRequest(id || "");
 
   const toggleItemExpanded = (stageId: number, itemId: number) => {
@@ -1057,11 +361,25 @@ export default function RequestView() {
   const completedStages = sopStages.filter(s => s.status === "completed").length;
   const progressPercentage = (completedStages / sopStages.length) * 100;
 
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="flex flex-col items-center justify-center h-64 text-slate-500">
+          <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
+          <p className="font-bold uppercase tracking-widest text-sm">Loading Request Data...</p>
+        </div>
+      </MainLayout>
+    );
+  }
+
   if (!requestData) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Request not found</p>
+        <div className="flex flex-col items-center justify-center h-64">
+          <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Request Not Found</h2>
+          <p className="text-muted-foreground mb-6">This request ID does not exist in the database.</p>
+          <Button onClick={() => navigate("/requests")}>Return to Requests</Button>
         </div>
       </MainLayout>
     );
@@ -1259,7 +577,6 @@ export default function RequestView() {
                   >
                     {/* Step Circle */}
                     {isCompleted ? (
-                      // Completed: Solid green with checkmark
                       <motion.div
                         initial={{ scale: 0.8 }}
                         animate={{ scale: 1 }}
@@ -1278,7 +595,6 @@ export default function RequestView() {
                         </motion.div>
                       </motion.div>
                     ) : isActive ? (
-                      // Active: Green outline with pulsing center
                       <motion.div
                         className={cn(
                           "w-16 h-16 lg:w-20 lg:h-20 rounded-full flex items-center justify-center",
@@ -1305,7 +621,6 @@ export default function RequestView() {
                         />
                       </motion.div>
                     ) : (
-                      // Pending: Grey outline with number
                       <div
                         className={cn(
                           "w-16 h-16 lg:w-20 lg:h-20 rounded-full flex items-center justify-center",
@@ -1789,3 +1104,4 @@ export default function RequestView() {
     </MainLayout>
   );
 }
+

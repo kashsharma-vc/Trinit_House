@@ -22,7 +22,7 @@ class WorkshopSerializer(serializers.ModelSerializer):
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = '__all__'
+        fields = '__all__' # changes 
 
 
 class CompressorSerializer(serializers.ModelSerializer):
@@ -31,3 +31,18 @@ class CompressorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Compressor
         fields = '__all__'
+
+
+from .models import Role, RoleAccessMapping
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = ['id', 'role_name', 'description']
+
+class RoleAccessMappingSerializer(serializers.ModelSerializer):
+
+    role_name = serializers.CharField(source='role.role_name', read_only=True)
+    class Meta:
+        model = RoleAccessMapping
+        fields = ['id', 'role', 'role_name' ,'site_id', 'permissions']

@@ -1,16 +1,10 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom"; // <-- NEW IMPORT
 import { motion } from "framer-motion";
-import { Bell, Search, User, Calendar, MapPin, Settings2, Filter, X, CheckCircle } from "lucide-react";
+import { Bell, Search, User, Calendar, MapPin, Settings2, CheckCircle } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,16 +18,11 @@ interface HeaderProps {
   onFilterChange?: (filters: any) => void;
 }
 
-const zones = ["All Zones", "Northern", "Southern", "Eastern", "Western", "Central"];
-const workshops = ["All Workshops", "Delhi Workshop", "Mumbai Workshop", "Chennai Workshop", "Kolkata Workshop"];
-const compressorTypes = ["All Types", "ELGi W-Type", "ELGi 15HP", "Reciprocating", "Screw Type"];
-
 export function Header({ onFilterChange }: HeaderProps) {
-  const [showFilters, setShowFilters] = useState(false);
+  const navigate = useNavigate(); // <-- NEW INITIALIZATION
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [filters, setFilters] = useState({ date: "7days", zone: "All Zones", workshop: "All Workshops", compressor: "All Types" });
 
-  // 1. Fetch Notifications
+  // Fetch Notifications
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
@@ -48,13 +37,6 @@ export function Header({ onFilterChange }: HeaderProps) {
     };
     fetchNotifications();
   }, []);
-
-  // 2. Handle Filter Logic
-  const updateFilter = (key: string, value: string) => {
-    const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
-    onFilterChange?.(newFilters); // This tells the Parent component (MainLayout) to update
-  };
 
   return (
     <motion.header 
@@ -71,10 +53,7 @@ export function Header({ onFilterChange }: HeaderProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-2">
-            <Filter className="w-4 h-4" /> Filters
-          </Button>
-
+          
           {/* Notification Bell */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -110,38 +89,24 @@ export function Header({ onFilterChange }: HeaderProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Admin User</DropdownMenuLabel>
-              <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem className="text-danger">Log out</DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer">Profile</DropdownMenuItem>
+              
+              {/* <-- UPDATED LOGOUT BUTTON --> */}
+              <DropdownMenuItem 
+                className="text-red-600 font-bold cursor-pointer"
+                onClick={() => {
+                  localStorage.removeItem("authToken");
+                  localStorage.removeItem("user");
+                  navigate("/login");
+                }}
+              >
+                Log out
+              </DropdownMenuItem>
+              
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
-
-      {/* Filter Bar */}
-      <motion.div
-        initial={false}
-        animate={{ height: showFilters ? "auto" : 0, opacity: showFilters ? 1 : 0 }}
-        className="overflow-hidden border-t border-border"
-      >
-        <div className="flex flex-wrap items-center gap-4 px-6 py-4 bg-muted/30">
-          <Select onValueChange={(v) => updateFilter("date", v)}>
-            <SelectTrigger className="w-40 bg-card"><SelectValue placeholder="Date range" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="7days">Last 7 days</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select onValueChange={(v) => updateFilter("zone", v)}>
-            <SelectTrigger className="w-36 bg-card"><SelectValue placeholder="Zone" /></SelectTrigger>
-            <SelectContent>
-              {zones.map(z => <SelectItem key={z} value={z}>{z}</SelectItem>)}
-            </SelectContent>
-          </Select>
-
-          <Button variant="ghost" size="icon" onClick={() => setShowFilters(false)}><X className="w-4 h-4" /></Button>
-        </div>
-      </motion.div>
     </motion.header>
   );
 }

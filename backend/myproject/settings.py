@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "finance" ,
     "warranty" ,
     "corsheaders",
+    "rest_framework.authtoken",
 ]
 
 MIDDLEWARE = [

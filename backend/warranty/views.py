@@ -19,3 +19,4 @@ def export_warranty_csv(request):
     for call in WarrantyCall.objects.all():
         writer.writerow([call.call_id, call.equipment, call.vendor, call.status, call.issue])
     return response
+

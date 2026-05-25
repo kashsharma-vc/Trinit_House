@@ -13,8 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Plus, Search, Eye, Edit, ChevronLeft, Upload } from "lucide-react";
+import { Plus, Search, Eye, Edit, ChevronLeft, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 
@@ -36,16 +35,13 @@ export default function Requests() {
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
 
-  // 1. Data States
   const [requestsData, setRequestsData] = useState<any[]>([]);
-  
-  // NEW: States to hold your dropdown options from Django Setup APIs
   const [zones, setZones] = useState<any[]>([]);
   const [workshops, setWorkshops] = useState<any[]>([]);
   const [compressors, setCompressors] = useState<any[]>([]);
 
-  // 2. Form State
   const [formData, setFormData] = useState({
+    id: "",
     request_type: "Repair",
     priority: "Medium",
     status: "Open",
@@ -53,126 +49,139 @@ export default function Requests() {
     compressor_model: "",
     serial_number: "",
     expected_date: new Date().toISOString().split("T")[0],
-    zone_id: "",
-    workshop_id: "",
-    compressor_id: "",
+    zone_id: undefined as string | undefined,
+    workshop_id: undefined as string | undefined,
+    compressor_id: undefined as string | undefined,
   });
 
-  // 3. Fetch EVERYTHING on page load
+  const fetchAllData = async () => {
+    try {
+      const [reqRes, zoneRes, wsRes, compRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/operations/requests/`),
+        fetch(`${API_BASE_URL}/setups/zones/`),
+        fetch(`${API_BASE_URL}/setups/workshops/`),
+        fetch(`${API_BASE_URL}/setups/compressors/`)
+      ]);
+
+      const reqData = await reqRes.json();
+      const zoneData = await zoneRes.json();
+      const wsData = await wsRes.json();
+      const compData = await compRes.json();
+
+      setZones(Array.isArray(zoneData) ? zoneData : (zoneData.results || []));
+      setWorkshops(Array.isArray(wsData) ? wsData : (wsData.results || []));
+      setCompressors(Array.isArray(compData) ? compData : (compData.results || []));
+
+      const rawRequests = Array.isArray(reqData) ? reqData : (reqData.results || []);
+
+      const formattedRequests = rawRequests.map((req: any) => ({
+        id: req.request_id || req.id,
+        date: req.request_date || req.created_on || "N/A",
+        zone: req.zone_name || "Unassigned",
+        zoneId: req.zone,
+        workshop: req.workshop_name || "Unassigned",
+        workshopId: req.workshop,
+        type: req.request_type,
+        compressor: req.compressor_type || "Unknown",
+        compressorId: req.compressor,
+        compressorModel: req.compressor_model || "",
+        serialNumber: req.serial_number || "",
+        description: req.description || "",
+        priority: req.priority,
+        status: req.status,
+        expectedDate: req.expected_date || "",
+      }));
+
+      setRequestsData(formattedRequests);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+    }
+  };
+
   useEffect(() => {
-    const fetchAllData = async () => {
-      try {
-        // Fetch requests and setup masters all at the same time
-        const [reqRes, zoneRes, wsRes, compRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/operations/requests/`),
-          fetch(`${API_BASE_URL}/setups/zones/`),
-          fetch(`${API_BASE_URL}/setups/workshops/`),
-          fetch(`${API_BASE_URL}/setups/compressors/`)
-        ]);
-
-        const reqData = await reqRes.json();
-        const zoneData = await zoneRes.json();
-        const wsData = await wsRes.json();
-        const compData = await compRes.json();
-
-        // Safely extract arrays (handles Django pagination)
-        const rawRequests = Array.isArray(reqData) ? reqData : (reqData.results || []);
-        setZones(Array.isArray(zoneData) ? zoneData : (zoneData.results || []));
-        setWorkshops(Array.isArray(wsData) ? wsData : (wsData.results || []));
-        setCompressors(Array.isArray(compData) ? compData : (compData.results || []));
-
-        // Format requests for the table
-        const formattedRequests = rawRequests.map((req: any) => ({
-          id: req.request_id,
-          date: req.request_date,
-          zone: req.zone_name || "Unassigned",
-          workshop: req.workshop_name || "Unassigned",
-          type: req.request_type,
-          compressor: req.compressor_type || "Unknown",
-          priority: req.priority,
-          status: req.status,
-          expectedDate: req.expected_date || "TBD",
-        }));
-
-        setRequestsData(formattedRequests);
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      }
-    };
-
     fetchAllData();
   }, []);
 
-  // 4. Submit Function
-  const handleSubmit = async () => {
-    try {
-      // Clean data before sending to Django
-      const payload = {
-        request_type: formData.request_type,
-        priority: formData.priority,
-        status: formData.status,
-        description: formData.description,
-        compressor_model: formData.compressor_model,
-        serial_number: formData.serial_number,
-        expected_date: formData.expected_date || null,
-        // Convert the string dropdown values back into integers for Django
-        zone: formData.zone_id ? parseInt(formData.zone_id) : null,
-        workshop: formData.workshop_id ? parseInt(formData.workshop_id) : null,
-        compressor: formData.compressor_id ? parseInt(formData.compressor_id) : null,
-      };
+  const openAddForm = () => {
+    setFormData({
+      id: "", request_type: "Repair", priority: "Medium", status: "Open", description: "",
+      compressor_model: "", serial_number: "", expected_date: new Date().toISOString().split("T")[0],
+      zone_id: undefined, workshop_id: undefined, compressor_id: undefined,
+    });
+    setShowForm(true);
+  };
 
-      const response = await fetch(`${API_BASE_URL}/operations/requests/`, {
-        method: "POST",
+  const openEditForm = (req: any) => {
+    setFormData({
+      id: req.id,
+      request_type: req.type || "Repair",
+      priority: req.priority || "Medium",
+      status: req.status || "Open",
+      description: req.description,
+      compressor_model: req.compressorModel,
+      serial_number: req.serialNumber,
+      expected_date: req.expectedDate ? req.expectedDate.split("T")[0] : "",
+      zone_id: req.zoneId ? String(req.zoneId) : undefined,
+      workshop_id: req.workshopId ? String(req.workshopId) : undefined,
+      compressor_id: req.compressorId ? String(req.compressorId) : undefined,
+    });
+    setShowForm(true);
+  };
+
+  const handleSubmit = async () => {
+    const isEditing = !!formData.id;
+    const url = isEditing ? `${API_BASE_URL}/operations/requests/${formData.id}/` : `${API_BASE_URL}/operations/requests/`;
+
+    const payload = {
+      request_type: formData.request_type,
+      priority: formData.priority,
+      status: formData.status,
+      description: formData.description,
+      compressor_model: formData.compressor_model,
+      serial_number: formData.serial_number,
+      expected_date: formData.expected_date || null,
+      zone: formData.zone_id ? parseInt(formData.zone_id) : null,
+      workshop: formData.workshop_id ? parseInt(formData.workshop_id) : null,
+      compressor: formData.compressor_id ? parseInt(formData.compressor_id) : null,
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: isEditing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        const errorData = await response.text();
-        console.error("Django Error:", errorData);
-        alert("Failed to save! Check the console.");
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessages = Object.entries(errorData)
+          .map(([field, msgs]) => `${field.toUpperCase()}: ${msgs}`)
+          .join('\n');
+        alert(`Cannot save request:\n${errorMessages || 'Validation Error'}`);
         return;
       }
 
-      const newRequest = await response.json();
-      
-      const formattedNewRequest = {
-        id: newRequest.request_id,
-        date: newRequest.request_date,
-        zone: newRequest.zone_name || "Unassigned",
-        workshop: newRequest.workshop_name || "Unassigned",
-        type: newRequest.request_type,
-        compressor: newRequest.compressor_type || "Unknown",
-        priority: newRequest.priority,
-        status: newRequest.status,
-        expectedDate: newRequest.expected_date || "TBD",
-      };
-
-      setRequestsData([formattedNewRequest, ...requestsData]);
       setShowForm(false);
-      
-      // Reset form
-      setFormData({
-        request_type: "Repair",
-        priority: "Medium",
-        status: "Open",
-        description: "",
-        compressor_model: "",
-        serial_number: "",
-        expected_date: new Date().toISOString().split("T")[0],
-        zone_id: "",
-        workshop_id: "",
-        compressor_id: "",
-      });
-
+      fetchAllData();
     } catch (error) {
-      console.error("Network error:", error);
+      alert("Network error. Could not save the request.");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this request?")) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/operations/requests/${id}/`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Delete failed");
+      fetchAllData();
+    } catch (err) {
+      alert("Failed to delete request.");
     }
   };
 
   const filteredRequests = requestsData.filter(
     (req) =>
-      req.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(req.id).toLowerCase().includes(searchQuery.toLowerCase()) ||
       req.zone.toLowerCase().includes(searchQuery.toLowerCase()) ||
       req.workshop.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -187,19 +196,17 @@ export default function Requests() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, x: -20 }}
           >
-            {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h1 className="text-2xl font-bold text-foreground">Service Requests</h1>
                 <p className="text-muted-foreground mt-1">Manage and track service requests</p>
               </div>
-              <Button onClick={() => setShowForm(true)} className="gap-2">
+              <Button onClick={openAddForm} className="gap-2">
                 <Plus className="w-4 h-4" />
                 Add Request
               </Button>
             </div>
 
-            {/* Filters */}
             <div className="filter-bar mb-6">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -212,58 +219,80 @@ export default function Requests() {
               </div>
             </div>
 
-            {/* Table */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="bg-card rounded-xl shadow-soft-md overflow-hidden"
             >
               <div className="overflow-x-auto">
-                <table className="data-table">
-                  <thead>
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 font-black uppercase text-[11px] text-slate-500 border-b">
                     <tr>
-                      <th>Request ID</th>
-                      <th>Date</th>
-                      <th>Zone</th>
-                      <th>Workshop</th>
-                      <th>Type</th>
-                      <th>Compressor</th>
-                      <th>Priority</th>
-                      <th>Status</th>
-                      <th>Expected Date</th>
-                      <th>Actions</th>
+                      <th className="p-4">Request ID</th>
+                      <th className="p-4">Date</th>
+                      <th className="p-4">Zone</th>
+                      <th className="p-4">Workshop</th>
+                      <th className="p-4">Type</th>
+                      <th className="p-4">Compressor</th>
+                      <th className="p-4">Priority</th>
+                      <th className="p-4">Status</th>
+                      <th className="p-4">Expected Date</th>
+                      <th className="p-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {filteredRequests.map((req, index) => (
                       <motion.tr
                         key={req.id}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.05 }}
-                        className="cursor-pointer hover:bg-muted/50"
+                        className="hover:bg-slate-50 transition-colors cursor-pointer"
                         onClick={() => navigate(`/requests/${req.id}`)}
                       >
-                        <td className="font-medium text-primary">{req.id}</td>
-                        <td>{req.date}</td>
-                        <td>{req.zone}</td>
-                        <td>{req.workshop}</td>
-                        <td>{req.type}</td>
-                        <td>{req.compressor}</td>
-                        <td className={priorityColors[req.priority as keyof typeof priorityColors] || ""}>
+                        <td className="p-4 font-bold text-primary">#{req.id}</td>
+                        <td className="p-4 text-xs text-slate-500">{req.date.split("T")[0]}</td>
+                        <td className="p-4 font-medium text-slate-700">{req.zone}</td>
+                        <td className="p-4 text-slate-600">{req.workshop}</td>
+                        <td className="p-4 font-medium">{req.type}</td>
+                        <td className="p-4 text-slate-600">{req.compressor}</td>
+                        <td className={cn("p-4", priorityColors[req.priority as keyof typeof priorityColors] || "")}>
                           {req.priority}
                         </td>
-                        <td>
+                        <td className="p-4">
                           <span className={cn("status-badge", statusColors[req.status as keyof typeof statusColors] || "")}>
                             <span className="w-1.5 h-1.5 rounded-full bg-current" />
                             {req.status}
                           </span>
                         </td>
-                        <td>{req.expectedDate}</td>
-                        <td>
-                          <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); navigate(`/requests/${req.id}`); }}>
-                              <Eye className="w-4 h-4" />
+                        <td className="p-4 text-slate-500">{req.expectedDate}</td>
+                        <td className="p-4">
+                          <div className="flex items-center justify-end gap-1">
+                            {/* FIXED: Added e.stopPropagation() to all buttons */}
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={(e) => { e.stopPropagation(); navigate(`/requests/${req.id}`); }} 
+                              title="View Request Details"
+                            >
+                              <Eye className="w-4 h-4 text-slate-500" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={(e) => { e.stopPropagation(); openEditForm(req); }} 
+                              title="Edit Request"
+                            >
+                              <Edit className="w-4 h-4 text-primary" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={(e) => { e.stopPropagation(); handleDelete(req.id); }} 
+                              title="Delete Request" 
+                              className="hover:text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
                         </td>
@@ -281,25 +310,24 @@ export default function Requests() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
           >
-            {/* Form Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-4">
                 <Button variant="ghost" size="icon" onClick={() => setShowForm(false)}>
                   <ChevronLeft className="w-5 h-5" />
                 </Button>
                 <div>
-                  <h1 className="text-2xl font-bold text-foreground">Create New Request</h1>
+                  <h1 className="text-2xl font-bold text-foreground">
+                    {formData.id ? `Modify Request #${formData.id}` : "Create New Request"}
+                  </h1>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Button variant="outline">Save Draft</Button>
-                <Button onClick={handleSubmit}>Submit Request</Button>
+                <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+                <Button onClick={handleSubmit}>{formData.id ? "Save Changes" : "Submit Request"}</Button>
               </div>
             </div>
 
-            {/* Form */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Section 1: Request Details */}
               <motion.div className="bg-card rounded-xl p-6 shadow-soft-md">
                 <h3 className="text-lg font-semibold mb-4">Request Details</h3>
                 <div className="space-y-4">
@@ -328,12 +356,10 @@ export default function Requests() {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    
-                    {/* DYNAMIC ZONE DROPDOWN */}
                     <div className="space-y-2">
                       <Label>Zone</Label>
                       <Select 
-                        value={formData.zone_id} 
+                        value={formData.zone_id || undefined} 
                         onValueChange={(val) => setFormData({...formData, zone_id: val})}
                       >
                         <SelectTrigger><SelectValue placeholder="Select Zone" /></SelectTrigger>
@@ -344,12 +370,10 @@ export default function Requests() {
                         </SelectContent>
                       </Select>
                     </div>
-                    
-                    {/* DYNAMIC WORKSHOP DROPDOWN */}
                     <div className="space-y-2">
                       <Label>Workshop</Label>
                       <Select 
-                        value={formData.workshop_id} 
+                        value={formData.workshop_id || undefined} 
                         onValueChange={(val) => setFormData({...formData, workshop_id: val})}
                       >
                         <SelectTrigger><SelectValue placeholder="Select Workshop" /></SelectTrigger>
@@ -360,7 +384,6 @@ export default function Requests() {
                         </SelectContent>
                       </Select>
                     </div>
-
                   </div>
                   <div className="space-y-2">
                     <Label>Request Type</Label>
@@ -388,16 +411,13 @@ export default function Requests() {
                 </div>
               </motion.div>
 
-              {/* Section 2: Compressor Details */}
               <motion.div className="bg-card rounded-xl p-6 shadow-soft-md">
                 <h3 className="text-lg font-semibold mb-4">Compressor Details</h3>
                 <div className="space-y-4">
-                  
-                  {/* DYNAMIC COMPRESSOR DROPDOWN */}
                   <div className="space-y-2">
                     <Label>Compressor Master</Label>
                     <Select 
-                        value={formData.compressor_id} 
+                        value={formData.compressor_id || undefined} 
                         onValueChange={(val) => setFormData({...formData, compressor_id: val})}
                       >
                         <SelectTrigger><SelectValue placeholder="Select Compressor" /></SelectTrigger>
@@ -410,7 +430,6 @@ export default function Requests() {
                         </SelectContent>
                       </Select>
                   </div>
-
                   <div className="space-y-2">
                     <Label>Compressor Model (Specific)</Label>
                     <Input 
@@ -430,7 +449,6 @@ export default function Requests() {
                 </div>
               </motion.div>
 
-              {/* Section 3: Metadata */}
               <motion.div className="bg-card rounded-xl p-6 shadow-soft-md lg:col-span-2">
                 <h3 className="text-lg font-semibold mb-4">Metadata</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -459,7 +477,6 @@ export default function Requests() {
                   </div>
                 </div>
               </motion.div>
-
             </div>
           </motion.div>
         )}

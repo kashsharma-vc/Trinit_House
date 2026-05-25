@@ -9,6 +9,7 @@ import {
   FileCheck,
   PhoneCall,
   Settings,
+  ShieldCheck, // Imported the new icon for Role Access
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -22,6 +23,7 @@ const navItems = [
   { title: "Penalty War Room", path: "/penalty", icon: AlertTriangle },
   { title: "Invoice & Closure", path: "/invoice", icon: FileCheck },
   { title: "Warranty Calls", path: "/warranty", icon: PhoneCall },
+  { title: "Role Access", path: "/role-access", icon: ShieldCheck }, // <-- NEW MENU ITEM ADDED HERE
   { title: "Setup", path: "/setup", icon: Settings },
 ];
 

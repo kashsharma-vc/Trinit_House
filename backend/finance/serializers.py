@@ -17,4 +17,4 @@ class PenaltySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Penalty
-        fields = '__all__'
+        fields = '__all__' 
