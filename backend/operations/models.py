@@ -36,6 +36,7 @@ class ServiceRequest(models.Model):
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='Medium')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Draft')
     description = models.TextField(blank=True, null=True)
+    attachment = models.FileField(upload_to='requests/attachments', blank=True, null=True)
     
     # Equipment specifics
     compressor_model = models.CharField(max_length=100, blank=True)
@@ -129,3 +130,41 @@ class PenaltyCase(models.Model):
 
     def __str__(self):
         return f"{self.id} - {self.vendor}"
+    
+    # 1. The Stage Model
+# 1. The Stage Model
+class SOPStage(models.Model):
+    service_request = models.ForeignKey(ServiceRequest, related_name='stages', on_delete=models.CASCADE)
+    name = models.CharField(max_length=100) # e.g., "Pre-Inspection"
+    purpose = models.TextField(blank=True, null=True)  # 🟢 Added field
+    status = models.CharField(max_length=20, default="pending") # pending, active, completed
+    sequence = models.IntegerField(default=1)  # 🟢 Added field
+    labor_time = models.CharField(max_length=50, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.name} - Stage {self.sequence} ({self.status})"
+
+# 2. The Checklist Item Model
+class ChecklistItem(models.Model):
+    stage = models.ForeignKey(SOPStage, related_name='checklist', on_delete=models.CASCADE)
+    text = models.CharField(max_length=255) # e.g., "Verify lifting points"
+    completed = models.BooleanField(default=False)
+    completed_by = models.ForeignKey(
+    settings.AUTH_USER_MODEL, 
+    on_delete=models.SET_NULL, 
+    null=True, 
+    blank=True, 
+    related_name='completed_checklist_items')
+    completed_at = models.DateTimeField(blank=True, null=True) # 🟢 Added field
+    labor_time = models.CharField(max_length=50, blank=True, null=True) # 🟢 Added field
+    
+    # Validation Rules
+    attachment_label = models.CharField(max_length=100, blank=True, null=True) # 🟢 Added field
+    requires_doc = models.BooleanField(default=False) # 🟢 Added field
+    requires_photo = models.BooleanField(default=False) # 🟢 Added field
+    
+    # Live File Evidence
+    attachment = models.FileField(upload_to='checklist/attachments/', blank=True, null=True) # 🟢 Added field
+
+    def __str__(self):
+        return f"{self.text} - {'Done' if self.completed else 'Pending'}"

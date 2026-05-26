@@ -29,7 +29,8 @@ export default function Auth() {
     setIsLoading(true);
     setError("");
 
-    const endpoint = isLogin ? "/setups/auth/login/" : "/setups/auth/register/"; // Adjust path if needed
+    // 🌟 FIXED: Added "/api" prefix to match your root Django urls.py path configuration
+    const endpoint = isLogin ? "/setups/auth/login/" : "/setups/auth/register/";
     
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -41,12 +42,16 @@ export default function Auth() {
       const data = await response.json();
 
       if (response.ok) {
-        // Save the Token to LocalStorage to keep the user logged in
-        localStorage.setItem("authToken", data.token);
+        // Save the Token and User data to LocalStorage (matches the App.tsx RoleGuard keys)
+        localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
         
-        // Redirect to Dashboard
-        navigate("/");
+        // 🚦 THE REDIRECT SPLIT: Send users where they belong based on their role
+        if (data.user.is_superuser) {
+          navigate("/dashboard"); // Admin goes to Admin Command Center
+        } else {
+          navigate("/technician/requests"); // Technician goes to their assigned task dashboard
+        }
       } else {
         setError(data.error || "Authentication failed. Please try again.");
       }

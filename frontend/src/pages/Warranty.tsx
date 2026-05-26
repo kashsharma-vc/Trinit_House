@@ -19,7 +19,7 @@ import { KPICard } from "@/components/dashboard/KPICard";
 const workflowStages = ["Logged", "Assigned", "Joint Note", "Closure"];
 
 const statusColors = { 
-  Urgent: "bg-red-100 text-red-700", 
+  Urgent: "bg-teal-100 text-teal-800", 
   Normal: "bg-blue-100 text-blue-700", 
   Pending: "bg-amber-100 text-amber-700", 
   Closed: "bg-slate-200 text-slate-800" 
@@ -27,7 +27,7 @@ const statusColors = {
 
 const warrantyColors = { 
   Active: "bg-emerald-100 text-emerald-700", 
-  Expired: "bg-red-100 text-red-700" 
+  Expired: "bg-teal-100 text-teal-800" 
 };
 
 export default function Warranty() {
@@ -143,7 +143,7 @@ export default function Warranty() {
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-black uppercase tracking-tight text-slate-900 flex items-center gap-2">
-            <Dumbbell className="w-8 h-8 text-red-600" /> Warranty Ops
+            <Dumbbell className="w-8 h-8 text-teal-600" /> Warranty Ops
           </h1>
           <p className="text-slate-500 font-medium text-sm mt-1">Issue Tracking & Resolution Dashboard</p>
         </div>
@@ -151,7 +151,7 @@ export default function Warranty() {
           <Button variant="outline" className="font-bold border-slate-300" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" /> Export
           </Button>
-          <Button className="bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wide" onClick={() => { 
+          <Button className="gap-2 font-bold uppercase tracking-wide" onClick={() => { 
             setFormData({id:"", equipment:"", vendor:"", status:"Pending", issue:"", serial: "", warrantyStatus: "Active"}); 
             setFormOpen(true); 
           }}>
@@ -191,12 +191,12 @@ export default function Warranty() {
                 onClick={() => setSelectedCall(call)} 
                 className={cn(
                   "bg-white p-5 rounded-2xl border shadow-sm cursor-pointer transition-all flex flex-col justify-between min-h-[180px]",
-                  selectedCall?.id === call.id ? "border-red-600 ring-1 ring-red-600" : "border-slate-200 hover:border-red-400 hover:shadow-md"
+                  selectedCall?.id === call.id ? "border-teal-600 ring-1 ring-teal-600" : "border-slate-200 hover:border-red-400 hover:shadow-md"
                 )}
               >
                 <div className="flex justify-between items-start mb-4">
                     <div>
-                        <h4 className="font-bold text-red-600 text-base">{String(call.id)}</h4>
+                        <h4 className="font-bold text-teal-600 text-base">{String(call.id)}</h4>
                         <p className="text-sm text-slate-500">{call.loggedDate || "Today"}</p>
                     </div>
                     <div className="flex flex-col gap-1.5 items-end">
@@ -211,7 +211,7 @@ export default function Warranty() {
                 <div className="mt-auto">
                     <div className="flex gap-1.5 mb-3">
                         {workflowStages.map((_, i) => (
-                            <div key={i} className={cn("h-1.5 flex-1 rounded-full", i <= workflowStages.indexOf(call.stage) ? "bg-red-600" : "bg-slate-100")} />
+                            <div key={i} className={cn("h-1.5 flex-1 rounded-full", i <= workflowStages.indexOf(call.stage) ? "bg-teal-500" : "bg-slate-100")} />
                         ))}
                     </div>
                     <p className="text-xs text-slate-500 text-center">{call.stage} • SLA Due: {call.slaDue || "Pending"}</p>
@@ -263,7 +263,7 @@ export default function Warranty() {
               {selectedCall.assigned_role ? (
                 <div className="p-4 border border-slate-200 rounded-xl mb-8 bg-white shadow-sm flex items-center justify-between">
                   <div>
-                    <h4 className="font-bold text-sm mb-1 flex items-center gap-2 uppercase tracking-wide"><User className="w-4 h-4 text-red-600" /> Assigned Department</h4>
+                    <h4 className="font-bold text-sm mb-1 flex items-center gap-2 uppercase tracking-wide"><User className="w-4 h-4 text-teal-600" /> Assigned Department</h4>
                     <p className="text-slate-700 font-semibold">{selectedCall.assigned_role}</p>
                   </div>
                   <span className={cn("text-xs font-bold px-3 py-1 rounded-full uppercase", statusColors[selectedCall.status as keyof typeof statusColors])}>
@@ -350,7 +350,7 @@ export default function Warranty() {
               <Textarea className="mt-1 resize-none border-slate-300" rows={4} value={formData.issue} onChange={(e) => setFormData({...formData, issue: e.target.value})} />
             </div>
             
-            <Button onClick={handleSaveComplaint} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wide h-12 mt-2">
+            <Button onClick={handleSaveComplaint} className="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold uppercase tracking-wide h-12 mt-2">
               Save Complaint
             </Button>
           </div>

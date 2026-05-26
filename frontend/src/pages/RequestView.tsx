@@ -83,178 +83,6 @@ interface SopStage {
   sparesInfo?: string;
 }
 
-// Default stages for all requests
-const getSopStagesForRequest = (requestId: string): SopStage[] => {
-  return [
-    {
-      id: 1,
-      name: "Pre-Inspection",
-      icon: "🟢",
-      purpose: "Ensure safety compliance before any physical handling",
-      status: "completed" as const,
-      stageLock: "Transit stage locked until all items complete",
-      checklist: [
-        { id: 1, text: "Verify lifting points condition", completed: true, note: "Visual check as per SOP", attachmentLabel: "Pre-lift photos, SOP reference", completedBy: "Rajesh Kumar", completedAt: "28 Jan, 09:15 AM", laborTime: "15 mins" },
-        { id: 2, text: "Check lifting equipment certification validity", completed: true, note: "Certificate number & expiry verified", attachmentLabel: "Safety certificate", completedBy: "Rajesh Kumar", completedAt: "28 Jan, 09:30 AM", laborTime: "10 mins", documentName: "lifting_cert.pdf" },
-        { id: 3, text: "Inspect slings, hooks, shackles", completed: true, note: "Wear and damage check", attachmentLabel: "Inspection photos", completedBy: "Rajesh Kumar", completedAt: "28 Jan, 09:45 AM", laborTime: "20 mins" },
-        { id: 4, text: "Confirm PPE compliance", completed: true, note: "Helmet, gloves, shoes verified", attachmentLabel: "PPE compliance photo", completedBy: "Rajesh Kumar", completedAt: "28 Jan, 10:00 AM", laborTime: "5 mins" },
-        { id: 5, text: "Verify load weight vs lifting capacity", completed: true, note: "Load rating matched", attachmentLabel: "Load chart / document", completedBy: "Rajesh Kumar", completedAt: "28 Jan, 10:15 AM", laborTime: "10 mins" },
-        { id: 6, text: "Capture pre-inspection safety record", completed: true, attachmentLabel: "Safety document / photos", completedBy: "Rajesh Kumar", completedAt: "28 Jan, 10:30 AM", laborTime: "15 mins", photoUrl: "/placeholder.svg", photoDescription: "Pre-inspection complete" },
-      ],
-      laborTime: "1h 15m",
-      technician: "Rajesh Kumar",
-      completedAt: "28 Jan 2024, 10:30 AM",
-    },
-    {
-      id: 2,
-      name: "Transit",
-      icon: "🚚",
-      purpose: "Ensure safe and traceable transport",
-      status: "completed" as const,
-      stageLock: "Receiving stage locked until all items complete",
-      checklist: [
-        { id: 1, text: "Verify dispatch details", completed: true, note: "Dispatch ID and date confirmed", attachmentLabel: "Dispatch document", completedBy: "Amit Singh", completedAt: "28 Jan, 12:00 PM", laborTime: "10 mins" },
-        { id: 2, text: "Confirm transport vehicle suitability", completed: true, note: "Vehicle type approved", attachmentLabel: "Vehicle photo", completedBy: "Amit Singh", completedAt: "28 Jan, 12:15 PM", laborTime: "15 mins" },
-        { id: 3, text: "Document handling instructions", completed: true, note: "Fragile / tilt instructions", attachmentLabel: "Instruction sheet", completedBy: "Amit Singh", completedAt: "28 Jan, 12:30 PM", laborTime: "10 mins" },
-        { id: 4, text: "Record expected arrival", completed: true, note: "ETA logged", attachmentLabel: "Transport manifest", completedBy: "Amit Singh", completedAt: "28 Jan, 01:00 PM", laborTime: "5 mins", documentName: "transport_manifest.pdf" },
-      ],
-      laborTime: "40m",
-      technician: "Amit Singh",
-      completedAt: "28 Jan 2024, 01:00 PM",
-    },
-    {
-      id: 3,
-      name: "Receiving",
-      icon: "🟢",
-      purpose: "Confirm item integrity on arrival",
-      status: "completed" as const,
-      stageLock: "Inspection stage locked until all items complete",
-      checklist: [
-        { id: 1, text: "Verify delivery challan", completed: true, note: "Document matched", attachmentLabel: "Delivery challan", completedBy: "Priya Sharma", completedAt: "29 Jan, 08:30 AM", laborTime: "15 mins", documentName: "delivery_challan.pdf" },
-        { id: 2, text: "Match serial / DWL number", completed: true, note: "Numbers verified", attachmentLabel: "Nameplate photo", completedBy: "Priya Sharma", completedAt: "29 Jan, 08:45 AM", laborTime: "10 mins" },
-        { id: 3, text: "Inspect packaging condition", completed: true, note: "Damage check", attachmentLabel: "Packaging photos", completedBy: "Priya Sharma", completedAt: "29 Jan, 09:00 AM", laborTime: "20 mins" },
-        { id: 4, text: "Check for transport damage", completed: true, note: "Visual inspection notes", attachmentLabel: "Damage photos", completedBy: "Priya Sharma", completedAt: "29 Jan, 09:20 AM", laborTime: "15 mins" },
-        { id: 5, text: "Create & link job card", completed: true, note: "Job card ID generated", completedBy: "Priya Sharma", completedAt: "29 Jan, 09:45 AM", laborTime: "20 mins" },
-      ],
-      laborTime: "1h 20m",
-      technician: "Priya Sharma",
-      completedAt: "29 Jan 2024, 09:45 AM",
-    },
-    {
-      id: 4,
-      name: "Inspection",
-      icon: "🔵",
-      purpose: "Identify faults and scope of work",
-      status: "active" as const,
-      stageLock: "Disassembly stage locked until all items complete",
-      checklist: [
-        { id: 1, text: "Perform visual inspection", completed: true, note: "External condition noted", attachmentLabel: "Inspection photos", completedBy: "Rajesh Kumar", completedAt: "29 Jan, 11:00 AM", laborTime: "30 mins", photoUrl: "/placeholder.svg", photoDescription: "Visual inspection complete" },
-        { id: 2, text: "Check leaks / abnormal noise", completed: true, note: "Observations recorded", attachmentLabel: "Evidence images", completedBy: "Rajesh Kumar", completedAt: "29 Jan, 11:30 AM", laborTime: "20 mins" },
-        { id: 3, text: "Measure key parameters", completed: false, note: "Values recorded", attachmentLabel: "Measurement sheet" },
-        { id: 4, text: "Assign technician", completed: false, note: "Technician confirmed" },
-      ],
-      laborTime: "50m",
-      technician: "Rajesh Kumar",
-    },
-    {
-      id: 5,
-      name: "Disassembly",
-      icon: "⚪",
-      purpose: "Safe and traceable dismantling",
-      status: "pending" as const,
-      stageLock: "Cleaning stage locked until all items complete",
-      checklist: [
-        { id: 1, text: "Disconnect electrical connections", completed: false, note: "Isolation confirmed", attachmentLabel: "Safety photo" },
-        { id: 2, text: "Remove covers / housing", completed: false, note: "Steps followed", attachmentLabel: "Disassembly photos" },
-        { id: 3, text: "Extract internal assemblies", completed: false, note: "Parts identified", attachmentLabel: "Assembly photos" },
-        { id: 4, text: "Tag and document removed parts", completed: false, note: "Part IDs recorded", attachmentLabel: "Parts list" },
-      ],
-    },
-    {
-      id: 6,
-      name: "Cleaning",
-      icon: "🧼",
-      purpose: "Prepare parts for accurate inspection",
-      status: "pending" as const,
-      stageLock: "Parts Inspection stage locked until all items complete",
-      trackConsumables: true,
-      consumablesInfo: "Petrol / Diesel / Cleaning agent",
-      checklist: [
-        { id: 1, text: "Select approved cleaning method", completed: false, note: "Method as per SOP" },
-        { id: 2, text: "Record cleaning liquid used", completed: false, note: "Petrol / Diesel / Solvent", attachmentLabel: "Chemical usage record" },
-        { id: 3, text: "Record quantity consumed", completed: false, consumableInfo: "Consumable panel (read-only, inventory linked)" },
-        { id: 4, text: "Verify cleanliness & drying", completed: false, note: "Inspection notes", attachmentLabel: "Cleaning photos" },
-      ],
-    },
-    {
-      id: 7,
-      name: "Parts Inspection",
-      icon: "🔍",
-      purpose: "Decide Reuse / Repair / Replace",
-      status: "pending" as const,
-      stageLock: "Assembly stage locked until all items complete",
-      trackSpares: true,
-      sparesInfo: "Record spares needed",
-      checklist: [
-        { id: 1, text: "Measure dimensional tolerances", completed: false, note: "Values logged", attachmentLabel: "Measurement images" },
-        { id: 2, text: "Check wear limits vs SOP", completed: false, note: "Pass / fail noted" },
-        { id: 3, text: "Inspect seals & gaskets", completed: false, note: "Condition recorded", attachmentLabel: "Part photos" },
-        { id: 4, text: "Mark part decision", completed: false, note: "Reuse / Repair / Replace" },
-        { id: 5, text: "Identify required spares / tools", completed: false, spareInfo: "Spares panel (read-only)", note: "PO auto-triggered if unavailable" },
-      ],
-    },
-    {
-      id: 8,
-      name: "Assembly",
-      icon: "🛠️",
-      purpose: "Restore equipment to SOP standards",
-      status: "pending" as const,
-      stageLock: "Testing stage locked until all items complete",
-      trackConsumables: true,
-      trackSpares: true,
-      consumablesInfo: "Oil, grease, lubrication",
-      sparesInfo: "Parts used (inventory linked)",
-      checklist: [
-        { id: 1, text: "Verify repair plan", completed: false, note: "Plan approved" },
-        { id: 2, text: "Install correct spare parts", completed: false, spareInfo: "Parts used (inventory linked)" },
-        { id: 3, text: "Apply torque as per SOP", completed: false, note: "Torque values recorded" },
-        { id: 4, text: "Apply lubrication", completed: false, note: "Oil / grease type", attachmentLabel: "Lubrication record" },
-        { id: 5, text: "Verify fitment", completed: false, attachmentLabel: "Assembly photos" },
-      ],
-    },
-    {
-      id: 9,
-      name: "Testing",
-      icon: "🧪",
-      purpose: "Ensure functional reliability",
-      status: "pending" as const,
-      stageLock: "QC stage locked until all items complete",
-      trackConsumables: true,
-      consumablesInfo: "Test consumables (if any)",
-      checklist: [
-        { id: 1, text: "Verify test bench setup", completed: false, note: "Setup confirmed" },
-        { id: 2, text: "Execute functional tests", completed: false, note: "Test steps recorded" },
-        { id: 3, text: "Record performance readings", completed: false, attachmentLabel: "Test report" },
-        { id: 4, text: "Confirm parameters within limits", completed: false, note: "Pass / fail noted" },
-      ],
-    },
-    {
-      id: 10,
-      name: "QC Checklist",
-      icon: "🧾",
-      purpose: "Audit, compliance, and closure readiness",
-      status: "pending" as const,
-      stageLock: "Invoice & Closure unlock only after QC approval",
-      checklist: [
-        { id: 1, text: "Verify job card & documents", completed: false, attachmentLabel: "Job card" },
-        { id: 2, text: "Confirm SOP adherence", completed: false, note: "Audit notes" },
-        { id: 3, text: "Review inspection, assembly & test records", completed: false, attachmentLabel: "Consolidated reports" },
-        { id: 4, text: "Supervisor / QA approval", completed: false, note: "Approval recorded", attachmentLabel: "QC certificate" },
-      ],
-    },
-  ];
-};
-
 const statusColors = {
   completed: "bg-success text-success-foreground border-success",
   active: "bg-primary text-primary-foreground border-primary",
@@ -272,6 +100,16 @@ const stageIconMap: Record<string, React.ReactNode> = {
   "Assembly": <Wrench className="w-5 h-5" />,
   "Testing": <FlaskConical className="w-5 h-5" />,
   "QC Checklist": <FileCheck className="w-5 h-5" />,
+};
+
+// Helper function to resolve Stage Emojis dynamically if missing in DB backend
+const getStageEmoji = (name: string): string => {
+  const emojis: Record<string, string> = {
+    "Pre-Inspection": "🟢", "Transit": "🚚", "Receiving": "🟢", "Inspection": "🔵",
+    "Disassembly": "⚪", "Cleaning": "🧼", "Parts Inspection": "🔍", "Assembly": "🛠️",
+    "Testing": "🧪", "QC Checklist": "🧾"
+  };
+  return emojis[name] || "📋";
 };
 
 // Animated icon component
@@ -298,11 +136,12 @@ export default function RequestView() {
   const [expandedStage, setExpandedStage] = useState<number | null>(1);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
-  // NEW: State for real API data
+  // Real API database State management
   const [requestData, setRequestData] = useState<any>(null);
+  const [sopStages, setSopStages] = useState<SopStage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // NEW: Fetch data directly from the Django backend
+  // Fetch data directly from Django backend and map values dynamically
   useEffect(() => {
     const fetchRequestDetails = async () => {
       setIsLoading(true);
@@ -312,7 +151,7 @@ export default function RequestView() {
         
         const data = await response.json();
         
-        // Map the backend data to match your UI's expected format
+        // Map the backend structure to your application's UI expectations
         setRequestData({
           id: data.request_id || data.id,
           date: data.request_date || data.created_on?.split("T")[0] || "N/A",
@@ -323,13 +162,57 @@ export default function RequestView() {
           priority: data.priority || "Medium",
           status: data.status || "Open",
           expectedDate: data.expected_date ? data.expected_date.split("T")[0] : "TBD",
-          slaTat: "14 days", // Mocked for UI until backend supports it
-          daysRemaining: 14, // Mocked for UI until backend supports it
+          slaTat: data.sla_tat_days ? `${data.sla_tat_days} days` : "14 days", 
+          daysRemaining: 14, 
           serialNumber: data.serial_number || "N/A",
           model: data.compressor_model || "N/A",
         });
+
+        // Map live database stages arrays into frontend state structure gracefully
+        if (data.stages && data.stages.length > 0) {
+          
+          // CRITICAL FIX: Ensure stages are ALWAYS sorted 1 to 10
+          const sortedStages = [...data.stages].sort((a: any, b: any) => {
+            return (a.sequence || a.id) - (b.sequence || b.id);
+          });
+
+          const mappedStages: SopStage[] = sortedStages.map((stage: any) => ({
+            id: stage.id,
+            name: stage.name,
+            icon: stage.icon || getStageEmoji(stage.name),
+            purpose: stage.purpose || `Execute ${stage.name} protocols`,
+            status: (stage.status || "pending") as "completed" | "active" | "pending",
+            stageLock: stage.stage_lock_message || `${stage.name} locked until previous items complete`,
+            trackConsumables: stage.track_consumables || false,
+            trackSpares: stage.track_spares || false,
+            consumablesInfo: stage.consumables_info || "",
+            sparesInfo: stage.spares_info || "",
+            laborTime: stage.labor_time || undefined,
+            technician: stage.technician || data.assigned_to || undefined,
+            completedAt: stage.completed_at || undefined,
+            checklist: (stage.checklist || []).map((item: any) => ({
+              id: item.id,
+              text: item.text,
+              completed: item.completed || false,
+              note: item.note || undefined,
+              attachmentLabel: item.attachment_label || undefined,
+              completedBy: item.completed_by || undefined,
+              completedAt: item.completed_at ? new Date(item.completed_at).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, day: '2-digit', month: 'short' }) : undefined,
+              laborTime: item.labor_time || undefined,
+              delayMessage: item.delay_message || undefined,
+              photoUrl: item.attachment && (item.requires_photo || item.attachment.match(/\.(jpeg|jpg|gif|png)$/i)) ? item.attachment : undefined,
+              documentUrl: item.attachment && (item.requires_doc || item.attachment.match(/\.(pdf|doc|docx|xls|xlsx)$/i)) ? item.attachment : undefined,
+              documentName: item.attachment ? item.attachment.split('/').pop() : undefined,
+              selectedValue: item.selected_value || undefined,
+              inputValue: item.input_value || undefined,
+              consumableInfo: item.consumable_info || undefined,
+              spareInfo: item.spare_info || undefined
+            }))
+          }));
+          setSopStages(mappedStages);
+        }
       } catch (err) {
-        console.error(err);
+        console.error("Failed parsing backend workflow pipeline payload:", err);
         setRequestData(null);
       } finally {
         setIsLoading(false);
@@ -339,7 +222,26 @@ export default function RequestView() {
     if (id) fetchRequestDetails();
   }, [id]);
 
-  const sopStages = getSopStagesForRequest(id || "");
+  // Export to Excel/CSV
+  const handleExportCSV = () => {
+    if (!requestData) return;
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "Request ID,Date,Zone,Workshop,Type,Compressor,Priority,Status,Expected Date\n"
+      + `${requestData.id},${requestData.date},${requestData.zone},${requestData.workshop},${requestData.type},${requestData.compressor},${requestData.priority},${requestData.status},${requestData.expectedDate}`;
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${requestData.id}_Export.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Print to PDF (Job Card)
+  const handleExportPDF = () => {
+    window.print();
+  };
 
   const toggleItemExpanded = (stageId: number, itemId: number) => {
     const key = `${stageId}-${itemId}`;
@@ -347,26 +249,17 @@ export default function RequestView() {
   };
 
   const getStageProgress = (stage: SopStage) => {
+    if (!stage.checklist || stage.checklist.length === 0) return { completed: 0, total: 0, percentage: 0 };
     const completed = stage.checklist.filter((c) => c.completed).length;
     return { completed, total: stage.checklist.length, percentage: Math.round((completed / stage.checklist.length) * 100) };
   };
-
-  const isStageAccessible = (stageIndex: number) => {
-    if (stageIndex === 0) return true;
-    const prevStage = sopStages[stageIndex - 1];
-    return prevStage.checklist.every((item) => item.completed);
-  };
-
-  // Calculate overall progress
-  const completedStages = sopStages.filter(s => s.status === "completed").length;
-  const progressPercentage = (completedStages / sopStages.length) * 100;
 
   if (isLoading) {
     return (
       <MainLayout>
         <div className="flex flex-col items-center justify-center h-64 text-slate-500">
           <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
-          <p className="font-bold uppercase tracking-widest text-sm">Loading Request Data...</p>
+          <p className="font-bold uppercase tracking-widest text-sm">Loading Request Pipeline...</p>
         </div>
       </MainLayout>
     );
@@ -406,7 +299,7 @@ export default function RequestView() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={handleExportCSV}>
               <Download className="w-4 h-4" />
               Export
             </Button>
@@ -418,7 +311,7 @@ export default function RequestView() {
             </Button>
           </motion.div>
           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={handleExportPDF}>
               <FileText className="w-4 h-4" />
               View Job Card
             </Button>
@@ -555,7 +448,6 @@ export default function RequestView() {
           <div className="relative flex justify-between min-w-[900px] lg:min-w-0 z-10">
             {sopStages.map((stage, index) => {
               const progress = getStageProgress(stage);
-              const accessible = isStageAccessible(index);
               const isCompleted = stage.status === "completed";
               const isActive = stage.status === "active";
               const isPending = stage.status === "pending";
@@ -569,10 +461,10 @@ export default function RequestView() {
                   className="flex flex-col items-center flex-1"
                 >
                   <motion.button
-                    whileHover={accessible ? { scale: 1.1, y: -3 } : {}}
-                    whileTap={accessible ? { scale: 0.95 } : {}}
-                    onClick={() => accessible && setExpandedStage(expandedStage === stage.id ? null : stage.id)}
-                    disabled={!accessible}
+                    // CRITICAL FIX: Unlocked clicking for admins
+                    whileHover={{ scale: 1.1, y: -3 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setExpandedStage(expandedStage === stage.id ? null : stage.id)}
                     className="relative"
                   >
                     {/* Step Circle */}
@@ -816,7 +708,7 @@ export default function RequestView() {
                       >
                         <Lock className="w-4 h-4 text-warning shrink-0" />
                       </motion.div>
-                      <span><strong className="text-warning">🔒 Stage Lock:</strong> {currentStage.stageLock}</span>
+                      <span><strong className="text-warning">🔒 Stage Status:</strong> {currentStage.stageLock}</span>
                     </motion.div>
                   </motion.div>
 
@@ -889,7 +781,7 @@ export default function RequestView() {
                                         {item.attachmentLabel && (
                                           <p className="text-xs text-primary/80 mt-0.5 flex items-center gap-1">
                                             <Paperclip className="w-3 h-3" />
-                                            Attach: {item.attachmentLabel}
+                                            Required: {item.attachmentLabel}
                                           </p>
                                         )}
                                         {item.consumableInfo && (
@@ -1029,7 +921,7 @@ export default function RequestView() {
                                         )}
 
                                         {/* Document */}
-                                        {item.documentName && (
+                                        {item.documentUrl && (
                                           <motion.div 
                                             className="space-y-2"
                                             initial={{ opacity: 0, y: 10 }}
@@ -1050,11 +942,11 @@ export default function RequestView() {
                                                   <FileText className="w-8 h-8 text-primary" />
                                                 </motion.div>
                                                 <div className="flex-1 min-w-0">
-                                                  <p className="text-sm font-medium truncate">{item.documentName}</p>
+                                                  <p className="text-sm font-medium truncate">{item.documentName || "Attached Report"}</p>
                                                   <p className="text-xs text-muted-foreground">Click to view</p>
                                                 </div>
                                                 <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                                                  <Button size="icon" variant="ghost" className="h-8 w-8">
+                                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => window.open(item.documentUrl)}>
                                                     <Download className="w-4 h-4" />
                                                   </Button>
                                                 </motion.div>
@@ -1104,4 +996,3 @@ export default function RequestView() {
     </MainLayout>
   );
 }
-

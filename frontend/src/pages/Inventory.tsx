@@ -221,7 +221,7 @@ export default function Inventory() {
           <Button variant="outline" className="gap-2" onClick={handleExport}>
             <Download className="w-4 h-4" /> Export CSV
           </Button>
-          <Button className="gap-2 bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wide" onClick={openAddModal}>
+          <Button className="gap-2 font-bold uppercase tracking-wide" onClick={openAddModal}>
             <Plus className="w-4 h-4" /> Add Item
           </Button>
         </div>

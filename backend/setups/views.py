@@ -90,7 +90,7 @@ class LoginView(APIView):
             token, _ = Token.objects.get_or_create(user=user)
             return Response({
                 "token": token.key,
-                "user": {"id": user.id, "username": user.username, "email": user.email}
+                "user": {"id": user.id, "username": user.username, "email": user.email,"is_superuser": user.is_superuser}
             })
         return Response({"error": "Invalid Credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 

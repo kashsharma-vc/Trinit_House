@@ -3,6 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+// Pages
 import Dashboard from "./pages/Dashboard";
 import Requests from "./pages/Requests";
 import RequestView from "./pages/RequestView";
@@ -14,17 +16,37 @@ import Setup from "./pages/Setup";
 import NotFound from "./pages/NotFound";
 import RoleBaseAccessPage from "./pages/RoleBaseAccess";
 import Auth from "./pages/Auth"; 
+import TechnicianDashboard from "@/pages/TechnicianDashboard"; 
+import TechnicianRequestView from "@/pages/TechnicianRequestView";
 
 const queryClient = new QueryClient();
 
-// Security wrapper that checks for the login token
-const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-  const token = localStorage.getItem("authToken");
+/**
+ * 🔒 RoleGuard Component
+ * - Checks if user is logged in.
+ * - Checks if user has required role (Admin vs Technician).
+ */
+const RoleGuard = ({ children, requireAdmin }: { children: JSX.Element, requireAdmin: boolean }) => {
+  const token = localStorage.getItem("token"); // Ensure this matches your Auth.tsx key
+  const userString = localStorage.getItem("user");
+  const user = userString ? JSON.parse(userString) : null;
   
-  if (!token) {
+  // 1. Not logged in? Redirect to login
+  if (!token || !user) {
     return <Navigate to="/login" replace />;
   }
   
+  // 2. Admin attempting to view anything (Allowed)
+  if (user.is_superuser) {
+    return children;
+  }
+  
+  // 3. Technician attempting to view Admin-only route?
+  if (requireAdmin && !user.is_superuser) {
+    return <Navigate to="/technician/requests" replace />;
+  }
+  
+  // 4. Technician is allowed to view Technician routes
   return children;
 };
 
@@ -37,17 +59,22 @@ const App = () => (
         <Routes>
           {/* PUBLIC ROUTE */}
           <Route path="/login" element={<Auth />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
           
-          {/* PROTECTED ROUTES */}
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/requests" element={<ProtectedRoute><Requests /></ProtectedRoute>} />
-          <Route path="/requests/:id" element={<ProtectedRoute><RequestView /></ProtectedRoute>} />
-          <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-          <Route path="/penalty" element={<ProtectedRoute><Penalty /></ProtectedRoute>} />
-          <Route path="/invoice" element={<ProtectedRoute><Invoice /></ProtectedRoute>} />
-          <Route path="/warranty" element={<ProtectedRoute><Warranty /></ProtectedRoute>} />
-          <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
-          <Route path="/role-access" element={<ProtectedRoute><RoleBaseAccessPage /></ProtectedRoute>} />
+          {/* 🔴 ADMIN ONLY PROTECTED ROUTES */}
+          <Route path="/setup" element={<RoleGuard requireAdmin={true}><Setup /></RoleGuard>} />
+          <Route path="/role-access" element={<RoleGuard requireAdmin={true}><RoleBaseAccessPage /></RoleGuard>} />
+          <Route path="/inventory" element={<RoleGuard requireAdmin={true}><Inventory /></RoleGuard>} />
+          <Route path="/penalty" element={<RoleGuard requireAdmin={true}><Penalty /></RoleGuard>} />
+          <Route path="/invoice" element={<RoleGuard requireAdmin={true}><Invoice /></RoleGuard>} />
+          <Route path="/warranty" element={<RoleGuard requireAdmin={true}><Warranty /></RoleGuard>} />
+          <Route path="/dashboard" element={<RoleGuard requireAdmin={true}><Dashboard /></RoleGuard>} />
+          <Route path="/requests" element={<RoleGuard requireAdmin={true}><Requests /></RoleGuard>} />
+          <Route path="/requests/:id" element={<RoleGuard requireAdmin={true}><RequestView /></RoleGuard>} />
+          
+          {/* 🔵 TECHNICIAN PROTECTED ROUTES */}
+          <Route path="/technician/requests" element={<RoleGuard requireAdmin={false}><TechnicianDashboard /></RoleGuard>} />
+          <Route path="/technician/requests/:id" element={<RoleGuard requireAdmin={false}><TechnicianRequestView /></RoleGuard>} />
           
           {/* CATCH-ALL ROUTE */}
           <Route path="*" element={<NotFound />} />

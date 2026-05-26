@@ -190,7 +190,7 @@ export default function Penalty() {
           <Button variant="outline" className="font-bold border-slate-300" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" /> Export Report
           </Button>
-          <Button className="bg-red-600 hover:bg-red-700 text-white font-bold uppercase tracking-wide" onClick={() => { 
+          <Button className="gap-2 font-bold uppercase tracking-wide" onClick={() => { 
             setFormData({zone: "Northern", status: "Open", delayed: 0, penaltyRisk: 0, reason: "", vendor: "", workshop: "", location: ""}); 
             setFormOpen(true); 
           }}>
@@ -403,7 +403,7 @@ export default function Penalty() {
         </AnimatePresence>
       </div>
 
-      {/* --- ADD / EDIT RECORD MODAL --- */}
+      {/* --- log br/ EDIT RECORD MODAL --- */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader><DialogTitle>{formData.id ? "Modify Breach Record" : "Log New SLA Breach"}</DialogTitle></DialogHeader>
