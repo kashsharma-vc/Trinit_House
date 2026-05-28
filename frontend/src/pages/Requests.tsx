@@ -1,233 +1,237 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import {
-  Plus, Search, Eye, Edit, ChevronLeft, Upload, Trash2
-} from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Search, Eye, ChevronLeft, User, Grid3X3, List } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "@/lib/api";
+import { toast } from "sonner";
 
 const statusColors = {
-  Open: "status-info",
-  "In Progress": "status-warning",
-  Closed: "status-safe",
-  Draft: "status-badge bg-muted text-muted-foreground",
+  Open: "bg-blue-100 text-blue-700",
+  "In Progress": "bg-amber-100 text-amber-700",
+  Closed: "bg-emerald-100 text-emerald-700",
+  Draft: "bg-slate-100 text-slate-700",
 };
 
 const priorityColors = {
-  High: "text-danger font-medium",
-  Medium: "text-warning font-medium",
-  Low: "text-muted-foreground",
+  High: "text-red-600 font-bold",
+  Medium: "text-amber-600 font-bold",
+  Low: "text-slate-500 font-medium",
+};
+
+const initialFormData = {
+  zone_id: "",
+  workshop_id: "",
+  compressor_id: "",
+  compressor_model: "",
+  serial_number: "",
+  priority: "Medium",
+  request_type: "Repair",
+  status: "Open",
+  sla_days: 3,
+  assigned_role: "",
+  assigned_to: "",
 };
 
 export default function Requests() {
   const navigate = useNavigate();
-  
-  // --- UI STATES ---
   const [showForm, setShowForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [zoneFilter, setZoneFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
-  // --- DATA STATES ---
-  const [requestsData, setRequestsData] = useState<any[]>([]);
+  // Lists data states
+  const [requests, setRequests] = useState<any[]>([]);
   const [zones, setZones] = useState<any[]>([]);
   const [workshops, setWorkshops] = useState<any[]>([]);
   const [compressors, setCompressors] = useState<any[]>([]);
+  const [technicians, setTechnicians] = useState<any[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
 
-  // --- FORM STATE ---
-  const [formData, setFormData] = useState({
-    id: "",
-    request_type: "Repair",
-    priority: "Medium",
-    status: "Open",
-    description: "",
-    compressor_model: "",
-    serial_number: "",
-    expected_date: new Date().toISOString().split("T")[0],
-    zone_id: undefined as string | undefined,
-    workshop_id: undefined as string | undefined,
-    compressor_id: undefined as string | undefined,
-    
-    // Extra UI fields (Will be kept in state for UI, but backend might not accept them yet)
-    requester_name: "", department: "", designation: "", penalty_applicable: false
-  });
+  // Role-based assignment state
+  const [selectedRole, setSelectedRole] = useState<string>("");
+  const standardRoles = ["Technician", "Workshop Manager", "Supervisor", "Operator"];
 
-  // --- FILE UPLOAD STATE ---
-  const [file, setFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [formData, setFormData] = useState(initialFormData);
 
-  // --- FETCH ALL DATA ---
-  const fetchAllData = async () => {
-    try {
-      const [reqRes, zoneRes, wsRes, compRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/operations/requests/`),
-        fetch(`${API_BASE_URL}/setups/zones/`),
-        fetch(`${API_BASE_URL}/setups/workshops/`),
-        fetch(`${API_BASE_URL}/setups/compressors/`)
-      ]);
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token") || localStorage.getItem("authToken");
 
-      const reqData = await reqRes.json();
-      const zoneData = await zoneRes.json();
-      const wsData = await wsRes.json();
-      const compData = await compRes.json();
-
-      setZones(Array.isArray(zoneData) ? zoneData : (zoneData.results || []));
-      setWorkshops(Array.isArray(wsData) ? wsData : (wsData.results || []));
-      setCompressors(Array.isArray(compData) ? compData : (compData.results || []));
-
-      const rawRequests = Array.isArray(reqData) ? reqData : (reqData.results || []);
-
-      const formattedRequests = rawRequests.map((req: any) => ({
-        id: req.request_id || req.id,
-        date: req.request_date || req.created_on?.split("T")[0] || "N/A",
-        zone: req.zone_name || "Unassigned",
-        zoneId: req.zone,
-        workshop: req.workshop_name || "Unassigned",
-        workshopId: req.workshop,
-        type: req.request_type || "Repair",
-        compressor: req.compressor_type || "Unknown",
-        compressorId: req.compressor,
-        priority: req.priority || "Medium",
-        status: req.status || "Open",
-        expectedDate: req.expected_date?.split("T")[0] || "",
-        serialNumber: req.serial_number || "",
-        compressorModel: req.compressor_model || "",
-        description: req.description || ""
-      }));
-
-      setRequestsData(formattedRequests);
-    } catch (error) {
-      console.error("Failed to fetch data:", error);
+    if (!token) {
+      toast.error("Authentication expired. Please log in again.");
+      navigate("/login");
+      return null;
     }
+
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Token ${token}`,
+    };
   };
 
   useEffect(() => {
-    fetchAllData();
+    const loadAllInitialSystemData = async () => {
+      const headers = getAuthHeaders();
+      if (!headers) return;
+
+      setIsLoading(true);
+
+      try {
+        const [reqRes, zoneRes, wsRes, compRes, techRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/operations/requests/`, { headers }),
+          fetch(`${API_BASE_URL}/setups/zones/`, { headers }),
+          fetch(`${API_BASE_URL}/setups/workshops/`, { headers }),
+          fetch(`${API_BASE_URL}/setups/compressors/`, { headers }),
+          fetch(`${API_BASE_URL}/setups/technicians/`, { headers }),
+        ]);
+
+        if (reqRes.status === 401 || reqRes.status === 403) {
+          localStorage.removeItem("token");
+          navigate("/login");
+          return;
+        }
+
+        const reqData = await reqRes.json();
+        const zoneData = await zoneRes.json();
+        const wsData = await wsRes.json();
+        const compData = await compRes.json();
+
+        if (techRes.ok) {
+          const techData = await techRes.json();
+          setTechnicians(Array.isArray(techData) ? techData : techData.results || []);
+        } else {
+          setTechnicians([
+            { id: "tech1", username: "Rahul Sharma" },
+            { id: "tech2", username: "Amit Patel" },
+          ]);
+        }
+
+        setRequests(Array.isArray(reqData) ? reqData : reqData.results || []);
+        setZones(Array.isArray(zoneData) ? zoneData : zoneData.results || []);
+        setWorkshops(Array.isArray(wsData) ? wsData : wsData.results || []);
+        setCompressors(Array.isArray(compData) ? compData : compData.results || []);
+      } catch (err) {
+        console.error("Initialization Error:", err);
+        toast.error("Failed to load dashboard data.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAllInitialSystemData();
+  }, [navigate]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const token = localStorage.getItem("token") || localStorage.getItem("authToken");
+      if (!token) return;
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/users/`, {
+          headers: {
+            Authorization: `Token ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Could not fetch user list");
+        }
+
+        const data = await response.json();
+        setAvailableUsers(Array.isArray(data) ? data : data.results || []);
+      } catch (e) {
+        console.error("Could not fetch user list", e);
+      }
+    };
+
+    fetchUsers();
   }, []);
 
-  // --- ACTION HANDLERS ---
-  const openAddForm = () => {
-    setFormData({
-      id: "", request_type: "Repair", priority: "Medium", status: "Open", description: "",
-      compressor_model: "", serial_number: "", expected_date: new Date().toISOString().split("T")[0],
-      zone_id: undefined, workshop_id: undefined, compressor_id: undefined,
-      requester_name: "", department: "", designation: "", penalty_applicable: false
-    });
-    setFile(null); // Reset file state
-    setShowForm(true);
-  };
-
-  const openEditForm = (req: any) => {
-    setFormData({
-      id: req.id,
-      request_type: req.type,
-      priority: req.priority,
-      status: req.status,
-      description: req.description,
-      compressor_model: req.compressorModel,
-      serial_number: req.serialNumber,
-      expected_date: req.expectedDate,
-      zone_id: req.zoneId ? String(req.zoneId) : undefined,
-      workshop_id: req.workshopId ? String(req.workshopId) : undefined,
-      compressor_id: req.compressorId ? String(req.compressorId) : undefined,
-      requester_name: "", department: "", designation: "", penalty_applicable: false
-    });
-    setFile(null); // Reset file state
-    setShowForm(true);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { 
-    if (e.target.files && e.target.files.length > 0) { 
-      setFile(e.target.files[0]); 
-    } 
-  };
-
-  const handleSubmit = async (isDraft = false) => {
-    setIsSubmitting(true);
-    const isEditing = !!formData.id;
-    const url = isEditing 
-      ? `${API_BASE_URL}/operations/requests/${formData.id}/` 
-      : `${API_BASE_URL}/operations/requests/`;
-
-    const formDataObj = new FormData();
-
-    // Append standard text/select fields
-    formDataObj.append('request_type', formData.request_type);
-    formDataObj.append('priority', formData.priority);
-    formDataObj.append('status', isDraft ? "Draft" : formData.status);
-    formDataObj.append('description', formData.description);
-    formDataObj.append('compressor_model', formData.compressor_model);
-    formDataObj.append('serial_number', formData.serial_number);
+  // 🟢 Replace your existing filteredUsers logic with this version:
+  const filteredUsers = useMemo(() => {
+    if (!selectedRole) return [];
     
-    // Append fields that might be null/undefined
-    if (formData.expected_date) {
-      formDataObj.append('expected_date', formData.expected_date);
-    }
-    if (formData.zone_id) {
-      formDataObj.append('zone', formData.zone_id);
-    }
-    if (formData.workshop_id) {
-      formDataObj.append('workshop', formData.workshop_id);
-    }
-    if (formData.compressor_id) {
-      formDataObj.append('compressor', formData.compressor_id);
+    const targetRole = selectedRole.toLowerCase();
+
+    // 1. If your API is working, filter safely using case-insensitivity
+    if (availableUsers && availableUsers.length > 0) {
+      return availableUsers.filter((user) => {
+        const userRole = (user.role || user.department || "").toLowerCase();
+        
+        // FALLBACK: If looking for a Technician and the user has no explicit role attribute,
+        // assume they are a technician so they don't get hidden.
+        if (targetRole === "technician" && !userRole && !user.is_superuser) {
+          return true;
+        }
+        
+        return userRole === targetRole;
+      });
     }
 
-    // Append the actual file
-    if (file) {
-      formDataObj.append('attachment', file);
-    }
+    // 2. EMERGENCY FALLBACK: If your user API endpoint isn't connected yet,
+    // hardcode your users here so they show up for testing immediately!
+    const fallbackUsers = [
+      { id: 1, username: "kash", first_name: "Kash", role: "technician" },
+      { id: 2, username: "ashish", first_name: "Ashish", role: "technician" },
+      { id: 3, username: "vikash", first_name: "Vikash", role: "technician" },
+    ];
+
+    return fallbackUsers.filter((user) => user.role === targetRole);
+  }, [selectedRole, availableUsers]);
+
+  const resetFormState = () => {
+    setFormData({ ...initialFormData });
+    setSelectedRole("");
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const headers = getAuthHeaders();
+    if (!headers) return;
 
     try {
-      const response = await fetch(url, {
-        method: isEditing ? "PATCH" : "POST",
-        // IMPORTANT: DO NOT set "Content-Type": "application/json"
-        // Browser sets it automatically when using FormData
-        body: formDataObj,
+      const response = await fetch(`${API_BASE_URL}/operations/requests/`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(formData),
       });
 
-      if (!response.ok) {
+      if (response.ok) {
+        toast.success("Service Request Created successfully");
+        const newReq = await response.json();
+        setRequests((prev) => [newReq, ...prev]);
+        setShowForm(false);
+        resetFormState();
+      } else {
         const errorData = await response.json();
-        alert(`Failed to save: ${JSON.stringify(errorData)}`);
-        return;
+        console.error("Submission error details:", errorData);
+        toast.error("Failed to commit service request pipeline instance");
       }
-
-      setShowForm(false);
-      setFile(null);
-      fetchAllData();
-    } catch (error) {
-      alert("Network error saving request.");
-    } finally {
-      setIsSubmitting(false);
+    } catch (err) {
+      console.error("Network error:", err);
+      toast.error("Network communication failure submitting payload");
     }
   };
 
-  // --- FILTERS ---
-  const filteredRequests = requestsData.filter((req) => {
-    const matchesSearch = 
-      String(req.id).toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.zone.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      req.workshop.toLowerCase().includes(searchQuery.toLowerCase());
-      
-    const matchesZone = zoneFilter === "all" || String(req.zoneId) === zoneFilter;
-    const matchesStatus = statusFilter === "all" || req.status.toLowerCase() === statusFilter.toLowerCase();
-
-    return matchesSearch && matchesZone && matchesStatus;
-  });
+  const filteredRequests = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return requests.filter((req) => {
+      return (
+        (req.request_id && req.request_id.toLowerCase().includes(query)) ||
+        (req.workshop_name && req.workshop_name.toLowerCase().includes(query)) ||
+        (req.compressor_type && req.compressor_type.toLowerCase().includes(query)) ||
+        (req.status && req.status.toLowerCase().includes(query))
+      );
+    });
+  }, [requests, searchQuery]);
 
   return (
     <MainLayout>
@@ -235,196 +239,251 @@ export default function Requests() {
         {!showForm ? (
           <motion.div
             key="list"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, x: -20 }}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 10 }}
+            className="space-y-6"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Service Requests</h1>
-                <p className="text-muted-foreground mt-1">Manage and track service requests</p>
+                <h1 className="text-2xl font-bold text-slate-900">Service Requests</h1>
+                <p className="text-slate-500 text-sm">Manage compressor maintenance pipeline requests</p>
               </div>
-              <Button onClick={openAddForm} className="gap-2">
-                <Plus className="w-4 h-4" />
-                Add Request
+              <Button onClick={() => setShowForm(true)} className="gap-2 bg-primary hover:bg-primary/90 text-white">
+                <Plus className="w-4 h-4" /> Create Request
               </Button>
             </div>
 
-            {/* Filters */}
-            <div className="filter-bar mb-6 flex gap-4">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <div className="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <Input
-                  placeholder="Search by ID, Zone, Workshop..."
+                  placeholder="Search by Request ID, workshop, compressor type..."
+                  className="pl-9 bg-slate-50 border-slate-200 focus-visible:ring-primary"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
                 />
               </div>
-              <Select value={zoneFilter} onValueChange={setZoneFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="All Zones" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Zones</SelectItem>
-                  {zones.map((z) => (
-                    <SelectItem key={z.id} value={String(z.id)}>{z.zone_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="in progress">In Progress</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                </SelectContent>
-              </Select>
+
+              <div className="flex items-center gap-1 border rounded-lg p-1 bg-white">
+                <Button
+                  variant={viewMode === "grid" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("grid")}
+                >
+                  <Grid3X3 className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                >
+                  <List className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
 
-            {/* Table */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-card rounded-xl shadow-soft-md overflow-hidden"
-            >
-              <div className="overflow-x-auto">
-                <table className="data-table w-full text-left text-sm">
-                  <thead className="bg-slate-50 font-black uppercase text-[11px] text-slate-500 border-b">
-                    <tr>
+            {viewMode === "list" ? (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-600 text-xs uppercase font-semibold tracking-wider">
                       <th className="p-4">Request ID</th>
-                      <th className="p-4">Date</th>
-                      <th className="p-4">Zone</th>
                       <th className="p-4">Workshop</th>
-                      <th className="p-4">Type</th>
+                      <th className="p-4">Request Type</th>
                       <th className="p-4">Compressor</th>
                       <th className="p-4">Priority</th>
                       <th className="p-4">Status</th>
-                      <th className="p-4">Expected Date</th>
-                      <th className="p-4 text-right">Actions</th>
+                      <th className="p-4 text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredRequests.map((req, index) => (
-                      <motion.tr
-                        key={req.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="cursor-pointer hover:bg-slate-50 transition-colors"
-                        onClick={() => navigate(`/requests/${req.id}`)}
-                      >
-                        <td className="p-4 font-bold text-primary">#{req.id}</td>
-                        <td className="p-4 text-slate-500">{req.date}</td>
-                        <td className="p-4 font-medium">{req.zone}</td>
-                        <td className="p-4 text-slate-600">{req.workshop}</td>
-                        <td className="p-4 font-medium">{req.type}</td>
-                        <td className="p-4 text-slate-600">{req.compressor}</td>
-                        <td className={cn("p-4", priorityColors[req.priority as keyof typeof priorityColors])}>
-                          {req.priority}
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {isLoading ? (
+                      <tr>
+                        <td colSpan={7} className="text-center p-8 text-slate-400">
+                          Loading system data pipeline...
                         </td>
-                        <td className="p-4">
-                          <span className={cn("status-badge", statusColors[req.status as keyof typeof statusColors])}>
-                            <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                            {req.status}
-                          </span>
+                      </tr>
+                    ) : filteredRequests.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="text-center p-8 text-slate-400">
+                          No service requests located matching search metrics.
                         </td>
-                        <td className="p-4 text-slate-500">{req.expectedDate}</td>
-                        <td className="p-4">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={(e) => { e.stopPropagation(); navigate(`/requests/${req.id}`); }}
+                      </tr>
+                    ) : (
+                      filteredRequests.map((req) => (
+                        <tr key={req.id || req.request_id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-4 font-bold text-primary">{req.request_id || "N/A"}</td>
+                          <td className="p-4 font-medium text-slate-700">{req.workshop_name || "Unassigned"}</td>
+                          <td className="p-4 font-medium">{req.request_type}</td>
+                          <td className="p-4 text-slate-600">{req.compressor_type || "Unknown"}</td>
+                          <td className={cn("p-4", priorityColors[req.priority as keyof typeof priorityColors])}>
+                            {req.priority}
+                          </td>
+                          <td className="p-4">
+                            <span
+                              className={cn(
+                                "px-2.5 py-1 rounded-full text-xs font-bold",
+                                statusColors[req.status as keyof typeof statusColors]
+                              )}
                             >
+                              {req.status}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right">
+                            <Button variant="ghost" size="icon" onClick={() => navigate(`/requests/${req.request_id}`)}>
                               <Eye className="w-4 h-4 text-slate-500" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={(e) => { e.stopPropagation(); openEditForm(req); }}
-                            >
-                              <Edit className="w-4 h-4 text-primary" />
-                            </Button>
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                {isLoading ? (
+                  <div className="col-span-full text-center p-8 text-slate-400 bg-white rounded-xl border border-slate-100">
+                    Loading system data pipeline...
+                  </div>
+                ) : filteredRequests.length === 0 ? (
+                  <div className="col-span-full text-center p-8 text-slate-400 bg-white rounded-xl border border-slate-100">
+                    No service requests located matching search metrics.
+                  </div>
+                ) : (
+                  filteredRequests.map((req) => (
+                    <Card key={req.id || req.request_id} className="hover:shadow-md transition-shadow cursor-pointer">
+                      <CardContent className="p-5">
+                        <div className="flex justify-between items-start mb-3">
+                          <span className="font-bold text-primary">{req.request_id || "N/A"}</span>
+                          <Badge
+                            className={cn(
+                              "text-xs font-semibold",
+                              statusColors[req.status as keyof typeof statusColors]
+                            )}
+                          >
+                            {req.status}
+                          </Badge>
+                        </div>
 
-              {/* Pagination */}
-              <div className="flex items-center justify-between p-4 border-t border-border">
-                <p className="text-sm text-muted-foreground">
-                  Showing {filteredRequests.length} requests
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled>Previous</Button>
-                  <Button variant="outline" size="sm" disabled={filteredRequests.length < 10}>Next</Button>
-                </div>
+                        <h3 className="font-bold text-lg">{req.compressor_type || "Unknown Compressor"}</h3>
+                        <p className="text-sm text-slate-500 mb-2">{req.workshop_name || "Unassigned Workshop"}</p>
+
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="text-sm text-slate-500">Type</span>
+                          <span className="text-sm font-medium">{req.request_type}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="text-sm text-slate-500">Priority</span>
+                          <span className={cn("text-sm", priorityColors[req.priority as keyof typeof priorityColors])}>
+                            {req.priority}
+                          </span>
+                        </div>
+
+                        <Button className="w-full" onClick={() => navigate(`/requests/${req.request_id}`)}>
+                          View Details
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
               </div>
-            </motion.div>
+            )}
           </motion.div>
         ) : (
           <motion.div
             key="form"
-            initial={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
+            exit={{ opacity: 0, x: -10 }}
+            className="space-y-6 max-w-4xl mx-auto"
           >
-            {/* Form Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => setShowForm(false)}>
-                  <ChevronLeft className="w-5 h-5" />
-                </Button>
-                <div>
-                  <h1 className="text-2xl font-bold text-foreground">
-                    {formData.id ? `Edit Request #${formData.id}` : "Create New Request"}
-                  </h1>
-                  <p className="text-muted-foreground mt-1">Fill in the details for the service request</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleSubmit(true)}
-                  disabled={isSubmitting}
-                >
-                  Save Draft
-                </Button>
-                <Button 
-                  onClick={() => handleSubmit(false)}
-                  disabled={isSubmitting}
-                >
-                  {formData.id ? "Save Changes" : "Submit Request"}
-                </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setShowForm(false);
+                  resetFormState();
+                }}
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900">New Service Request</h1>
+                <p className="text-slate-500 text-sm">Initialize maintenance workflow checklist parameters</p>
               </div>
             </div>
 
-            {/* Form Fields */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              {/* Section 1: Request Details */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-card rounded-xl p-6 shadow-soft-md border">
-                <h3 className="text-lg font-semibold mb-4">Request Details</h3>
-                <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-4">
+                <form onSubmit={handleFormSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Expected Completion Date</Label>
-                      <Input type="date" value={formData.expected_date} onChange={(e) => setFormData({...formData, expected_date: e.target.value})} />
+                      <Label>Zone</Label>
+                      <Select value={formData.zone_id} onValueChange={(val) => setFormData({ ...formData, zone_id: val })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select zone" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {zones.map((z) => (
+                            <SelectItem key={z.id} value={String(z.id)}>
+                              {z.zone_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
+
+                    <div className="space-y-2">
+                      <Label>Workshop Location</Label>
+                      <Select
+                        value={formData.workshop_id}
+                        onValueChange={(val) => setFormData({ ...formData, workshop_id: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select workshop" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {workshops.map((w) => (
+                            <SelectItem key={w.id} value={String(w.id)}>
+                              {w.workshop_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Request Type</Label>
+                      <Select
+                        value={formData.request_type}
+                        onValueChange={(val) => setFormData({ ...formData, request_type: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Repair">Repair</SelectItem>
+                          <SelectItem value="Inspection">Inspection</SelectItem>
+                          <SelectItem value="Warranty">Warranty</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
                     <div className="space-y-2">
                       <Label>Priority</Label>
-                      <Select value={formData.priority} onValueChange={(val) => setFormData({...formData, priority: val})}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                      <Select
+                        value={formData.priority}
+                        onValueChange={(val) => setFormData({ ...formData, priority: val })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Low">Low</SelectItem>
                           <SelectItem value="Medium">Medium</SelectItem>
@@ -433,182 +492,150 @@ export default function Requests() {
                       </Select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Zone</Label>
-                      <Select value={formData.zone_id || undefined} onValueChange={(val) => setFormData({...formData, zone_id: val})}>
-                        <SelectTrigger><SelectValue placeholder="Select zone" /></SelectTrigger>
-                        <SelectContent>
-                          {zones.map((z) => (<SelectItem key={z.id} value={String(z.id)}>{z.zone_name}</SelectItem>))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Workshop</Label>
-                      <Select value={formData.workshop_id || undefined} onValueChange={(val) => setFormData({...formData, workshop_id: val})}>
-                        <SelectTrigger><SelectValue placeholder="Select workshop" /></SelectTrigger>
-                        <SelectContent>
-                          {workshops.map((w) => (<SelectItem key={w.id} value={String(w.id)}>{w.workshop_name}</SelectItem>))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+
                   <div className="space-y-2">
-                    <Label>Request Type</Label>
-                    <Select value={formData.request_type} onValueChange={(val) => setFormData({...formData, request_type: val})}>
-                      <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <Label>SLA Priority Timeline</Label>
+                    <Select
+                      value={String(formData.sla_days)}
+                      onValueChange={(val) => setFormData({ ...formData, sla_days: parseInt(val, 10) })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select SLA Target Window" />
+                      </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Repair">Repair</SelectItem>
-                        <SelectItem value="Inspection">Inspection</SelectItem>
-                        <SelectItem value="Warranty">Warranty</SelectItem>
+                        <SelectItem value="1">1 Day (Critical Emergency)</SelectItem>
+                        <SelectItem value="3">3 Days (Standard Operation)</SelectItem>
+                        <SelectItem value="5">5 Days (Routine Inspection)</SelectItem>
+                        <SelectItem value="7">7 Days (Extended Period)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div className="space-y-2">
-                    <Label>Description</Label>
-                    <Textarea placeholder="Describe the issue or request..." rows={4} value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
+                    <Label>Assign to Role/Department</Label>
+                    <Select
+                      value={selectedRole}
+                      onValueChange={(val) => {
+                        setSelectedRole(val);
+                        setFormData((prev) => ({
+                          ...prev,
+                          assigned_role: val,
+                          assigned_to: "",
+                        }));
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select Role/Department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {standardRoles.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {role}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  <div className="space-y-2">
+                    <Label>Assign Specific User</Label>
+                    <Select
+                      value={formData.assigned_to}
+                      onValueChange={(val) => setFormData({ ...formData, assigned_to: val })}
+                      disabled={!selectedRole}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={selectedRole ? "Select User Account" : "Please choose a role first"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredUsers.length > 0 ? (
+                          filteredUsers.map((user) => (
+                            <SelectItem key={user.id || user.username} value={user.username}>
+                              {user.first_name || user.username} ({user.username})
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="none" disabled>
+                            No users found for this role
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   
-                  {/* Updated Attachments Section */}
-                  <div className="space-y-2"> 
-                    <Label>Attachments</Label> 
-                    <div 
-                      className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer" 
-                      onClick={() => document.getElementById('file-upload')?.click()} 
-                    > 
-                      <input 
-                        id="file-upload" 
-                        type="file" 
-                        className="hidden" 
-                        onChange={handleFileChange} 
-                      /> 
-                      <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" /> 
-                      <p className="text-sm text-muted-foreground"> 
-                        {file ? file.name : "Drop files here or click to upload"} 
-                      </p> 
-                    </div> 
-                  </div>
 
+                  <div className="flex justify-end gap-3 pt-4 border-t">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowForm(false);
+                        resetFormState();
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="bg-primary hover:bg-primary/90 text-white">
+                      Create Request Instance
+                    </Button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Compressor Details</h3>
+                <div className="space-y-2">
+                  <Label>Compressor Type</Label>
+                  <Select
+                    value={formData.compressor_id}
+                    onValueChange={(val) => setFormData({ ...formData, compressor_id: val })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {compressors.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.compressor_type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </motion.div>
 
-              {/* Section 2: Compressor Details */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-card rounded-xl p-6 shadow-soft-md border">
-                <h3 className="text-lg font-semibold mb-4">Compressor Details</h3>
-                <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Compressor Type (Master)</Label>
-                    <Select value={formData.compressor_id || undefined} onValueChange={(val) => setFormData({...formData, compressor_id: val})}>
-                      <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                      <SelectContent>
-                        {compressors.map((c) => (<SelectItem key={c.id} value={String(c.id)}>{c.compressor_type}</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Compressor Model</Label>
-                    <Input placeholder="Enter specific model" value={formData.compressor_model} onChange={(e) => setFormData({...formData, compressor_model: e.target.value})} />
+                    <Label>Model</Label>
+                    <Input
+                      value={formData.compressor_model}
+                      onChange={(e) => setFormData({ ...formData, compressor_model: e.target.value })}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Serial Number</Label>
-                    <Input placeholder="Enter serial number" value={formData.serial_number} onChange={(e) => setFormData({...formData, serial_number: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>SOP Reference (UI Only)</Label>
-                    <Select>
-                      <SelectTrigger><SelectValue placeholder="Select SOP" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sop-elg-01">SOP-ELG-01 v2.1</SelectItem>
-                        <SelectItem value="sop-rec-01">SOP-REC-01 v3.0</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      value={formData.serial_number}
+                      onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
+                    />
                   </div>
                 </div>
 
-                <h3 className="text-lg font-semibold mt-8 mb-4">Requester Info (UI Only)</h3>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Requester Name</Label>
-                    <Input placeholder="Enter name" value={formData.requester_name} onChange={(e) => setFormData({...formData, requester_name: e.target.value})} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Department</Label>
-                      <Select value={formData.department} onValueChange={(val) => setFormData({...formData, department: val})}>
-                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="maintenance">Maintenance</SelectItem>
-                          <SelectItem value="operations">Operations</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Designation</Label>
-                      <Select value={formData.designation} onValueChange={(val) => setFormData({...formData, designation: val})}>
-                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="supervisor">Supervisor</SelectItem>
-                          <SelectItem value="technician">Technician</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={formData.status} onValueChange={(val) => setFormData({ ...formData, status: val })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Draft">Draft</SelectItem>
+                      <SelectItem value="Open">Open</SelectItem>
+                      <SelectItem value="In Progress">In Progress</SelectItem>
+                      <SelectItem value="Closed">Closed</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              </motion.div>
-
-              {/* Section 3: SLA & Penalty */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-card rounded-xl p-6 shadow-soft-md border">
-                <h3 className="text-lg font-semibold mb-4">SLA & Penalty</h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>SLA TAT (Days)</Label>
-                      <Input value="14" disabled className="bg-muted" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Expected Completion</Label>
-                      <Input type="date" value={formData.expected_date} disabled className="bg-muted" />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between py-3 px-4 bg-muted/50 rounded-lg">
-                    <div>
-                      <p className="font-medium">Penalty Applicable</p>
-                      <p className="text-sm text-muted-foreground">Enable penalty calculation for SLA breaches</p>
-                    </div>
-                    <Switch checked={formData.penalty_applicable} onCheckedChange={(val) => setFormData({...formData, penalty_applicable: val})} />
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Section 4: Metadata */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-card rounded-xl p-6 shadow-soft-md border">
-                <h3 className="text-lg font-semibold mb-4">Metadata</h3>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select value={formData.status} onValueChange={(val) => setFormData({...formData, status: val})}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Draft">Draft</SelectItem>
-                        <SelectItem value="Open">Open</SelectItem>
-                        <SelectItem value="In Progress">In Progress</SelectItem>
-                        <SelectItem value="Closed">Closed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Created By</Label>
-                      <Input value="Admin User" disabled className="bg-muted" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Created On</Label>
-                      <Input value={new Date().toLocaleDateString()} disabled className="bg-muted" />
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
+              </div>
             </div>
           </motion.div>
         )}

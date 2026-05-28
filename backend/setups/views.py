@@ -59,17 +59,40 @@ class RoleAccessMappingViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def sync_mapping(self, request):
         role_id = request.data.get('role_id')
-        site_id = request.data.get('site_id')
-        permissions = request.data.get('permissions', {})
+        zone_id = request.data.get('zone_id')
+        permissions_data = request.data.get('permissions', {})
 
-        mapping, created = RoleAccessMapping.objects.get_or_create(
-            role_id=role_id, 
-            site_id=site_id
-        )
-        mapping.permissions = permissions
-        mapping.save()
-        
-        return Response({"status": "success", "message": "Permissions saved to database."})
+        if not role_id or not zone_id:
+            return Response(
+                {"error": "role_id and zone_id are required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Look up the actual Role and Zone instances
+            role_instance = Role.objects.get(id=role_id)
+            zone_instance = Zone.objects.get(id=zone_id)
+
+            # Update or create the mapping record
+            mapping, created = RoleAccessMapping.objects.update_or_create(
+                role=role_instance,
+                zone=zone_instance,
+                defaults={'permissions': permissions_data}
+            )
+
+            return Response({
+                "message": "Mapping synced successfully", 
+                "created": created
+            }, status=status.HTTP_200_OK)
+
+        except Role.DoesNotExist:
+            return Response({"error": "Role not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Zone.DoesNotExist:
+            return Response({"error": "Zone not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            # This prints the exact reason for the 500 error in your Django terminal!
+            print(f"ERROR IN SYNC MAPPING: {str(e)}") 
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -112,3 +135,13 @@ class RegisterView(APIView):
             "token": token.key,
             "user": {"id": user.id, "username": user.username, "email": user.email}
         }, status=status.HTTP_201_CREATED)
+    
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.contrib.auth.models import User
+
+class TechnicianListView(APIView):
+    def get(self, request):
+        # Fetch all non-admin users to populate the assignment dropdown
+        techs = User.objects.filter(is_superuser=False).values('id', 'username')
+        return Response(techs)

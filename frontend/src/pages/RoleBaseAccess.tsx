@@ -2,105 +2,150 @@ import React, { useEffect, useMemo, useState } from "react";
 import { API_BASE_URL } from "@/lib/api";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ShieldCheck, Save, Loader2, CheckCircle2, Pencil, Users } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  ShieldCheck,
+  Save,
+  Loader2,
+  CheckCircle2,
+  Pencil,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
+// Decided core application features based on pages & setup modules
 const MODULE_ACCESS_SECTIONS = [
-  { 
-    id: "core", title: "Core Features", 
-    items: [{ key: "my_tickets", label: "My Tickets" }, { key: "staff", label: "Staff Management" }, { key: "communication", label: "Communications" }, { key: "vendors", label: "Vendor Management" }] 
+  {
+    id: "core",
+    title: "Core Operational Pages",
+    items: [
+      { key: "dashboard", label: "Dashboard Analytics" },
+      { key: "requests", label: "Service Requests & SOP Execution" },
+      { key: "inventory", label: "Inventory Management" },
+      { key: "penalty", label: "Penalty War Room Cases" },
+      { key: "invoice", label: "Invoice & Work Closure" },
+      { key: "warranty", label: "Warranty Calls Management" },
+    ],
   },
-  { 
-    id: "operations", title: "Operations", 
-    items: [{ key: "bookings", label: "Facility Bookings" }, { key: "visitor_mgmt", label: "Visitor Management" }, { key: "incidents", label: "Incident Reporting" }, { key: "work_order", label: "Work Orders" }, { key: "gatepass", label: "Gate Pass" }] 
+  {
+    id: "setup",
+    title: "System Setup & Administration Masters",
+    items: [
+      { key: "setup_masters", label: "Master Configurations (Zones, Workshops, Categories, Compressor Types, SOP, SLA)" },
+      { key: "role_access", label: "Role Based Access Control (RBAC)" },
+    ],
   },
-  { 
-    id: "financial", title: "Financial & Accounts", 
-    items: [{ key: "accounting", label: "Accounting" }, { key: "bills", label: "Billing & Invoicing" }] 
-  },
-  { 
-    id: "hr", title: "Human Resources", 
-    items: [{ key: "attendance", label: "Attendance" }, { key: "hrms", label: "HRMS" }] 
-  },
-  { 
-    id: "site_setup", title: "System Setup", 
-    items: [{ key: "setup_tickets", label: "Ticket Configurations" }, { key: "setup_incidents", label: "Incident Configurations" }] 
-  }
 ];
 
 const ACTION_KEYS = ["view", "create", "modify", "cancel", "delete"];
 
 function blankPermissions() {
-  return { view: false, create: false, modify: false, cancel: false, delete: false };
+  return {
+    view: false,
+    create: false,
+    modify: false,
+    cancel: false,
+    delete: false,
+  };
 }
 
 export default function RoleBaseAccessPage() {
-  const [sites, setSites] = useState<any[]>([]);
-  const [roles, setRoles] = useState<any[]>([]); 
-  
-  // NEW: State to hold all existing mappings for the overview table
+  const navigate = useNavigate();
+  const [zones, setZones] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
   const [allMappings, setAllMappings] = useState<any[]>([]);
-  
-  const [selectedSiteId, setSelectedSiteId] = useState("");
+
+  const [selectedZoneId, setSelectedZoneId] = useState("");
   const [selectedRoleId, setSelectedRoleId] = useState("");
+
   const [permissions, setPermissions] = useState<any>({});
-  
+
   const [loading, setLoading] = useState(true);
-  const [isFetchingPermissions, setIsFetchingPermissions] = useState(false); 
+  const [isFetchingPermissions, setIsFetchingPermissions] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
+
   const [statusMessage, setStatusMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // 1. Fetch Initial Data & All Mappings
+  // 🌟 NEW: Helper function to get Auth Headers safely
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token") || localStorage.getItem("authToken");
+    if (!token) {
+      toast.error("Session expired. Please log in again.");
+      navigate("/login");
+      return null;
+    }
+    return {
+      "Content-Type": "application/json",
+      "Authorization": `Token ${token}`,
+    };
+  };
+
   const fetchAllMappings = async () => {
+    const headers = getAuthHeaders();
+    if (!headers) return;
+
     try {
-      const res = await fetch(`${API_BASE_URL}/setups/role-access-mappings/`);
+      const res = await fetch(`${API_BASE_URL}/setups/role-access-mappings/`, { headers });
+
       if (res.ok) {
         const data = await res.json();
         setAllMappings(Array.isArray(data) ? data : data.results || []);
       }
     } catch (err) {
-      console.error("Failed to load mappings summary");
+      console.error("Failed to load mappings summary", err);
     }
   };
 
   useEffect(() => {
     const initializeData = async () => {
       setLoading(true);
+      const headers = getAuthHeaders();
+      if (!headers) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        const roleRes = await fetch(`${API_BASE_URL}/setups/roles/`);
+        const roleRes = await fetch(`${API_BASE_URL}/setups/roles/`, { headers });
         if (roleRes.ok) {
           const roleData = await roleRes.json();
           setRoles(Array.isArray(roleData) ? roleData : roleData.results || []);
         }
 
         try {
-            const siteRes = await fetch(`${API_BASE_URL}/setups/sites/`);
-            if (siteRes.ok) {
-                const siteData = await siteRes.json();
-                setSites(Array.isArray(siteData) ? siteData : siteData.results || []);
-            } else {
-                setSites([{ id: "1", siteName: "Main HQ" }]);
-            }
+          const zoneRes = await fetch(`${API_BASE_URL}/setups/zones/`, { headers });
+          if (zoneRes.ok) {
+            const zoneData = await zoneRes.json();
+            setZones(Array.isArray(zoneData) ? zoneData : zoneData.results || []);
+          } else {
+            setZones([{ id: "1", zone_name: "Main Zone" }]);
+          }
         } catch {
-            setSites([{ id: "1", siteName: "Main HQ" }]);
+          setZones([{ id: "1", zone_name: "Main Zone" }]);
         }
 
-        await fetchAllMappings(); // Fetch the overview data!
-
+        await fetchAllMappings();
       } catch (err) {
         console.error("Failed to load initial data", err);
       } finally {
         setLoading(false);
       }
     };
+
     initializeData();
   }, []);
 
-  // 2. Fetch specific permissions when dropdowns change
   useEffect(() => {
-    if (!selectedSiteId || !selectedRoleId) {
+    if (!selectedZoneId || !selectedRoleId) {
       setPermissions({});
       setIsEditMode(false);
       return;
@@ -108,12 +153,19 @@ export default function RoleBaseAccessPage() {
 
     const fetchPermissions = async () => {
       setIsFetchingPermissions(true);
+      const headers = getAuthHeaders();
+      if (!headers) return;
+
       try {
-        const res = await fetch(`${API_BASE_URL}/setups/role-access-mappings/?site_id=${selectedSiteId}&role=${selectedRoleId}`);
+        const res = await fetch(
+          `${API_BASE_URL}/setups/role-access-mappings/?zone_id=${selectedZoneId}&role=${selectedRoleId}`,
+          { headers }
+        );
+
         if (res.ok) {
           const data = await res.json();
           const mappings = Array.isArray(data) ? data : data.results || [];
-          
+
           if (mappings.length > 0 && mappings[0].permissions && Object.keys(mappings[0].permissions).length > 0) {
             setPermissions(mappings[0].permissions);
             setIsEditMode(false);
@@ -128,14 +180,21 @@ export default function RoleBaseAccessPage() {
         setIsFetchingPermissions(false);
       }
     };
-    
+
     fetchPermissions();
-  }, [selectedSiteId, selectedRoleId]);
+  }, [selectedZoneId, selectedRoleId]);
 
   const siteModuleGroups = useMemo(() => {
     return MODULE_ACCESS_SECTIONS.map((section) => {
-      const features = section.items.map((item) => ({ key: `${section.id}:${item.key}`, label: item.label }));
-      return { title: section.title, features };
+      const features = section.items.map((item) => ({
+        key: `${section.id}:${item.key}`,
+        label: item.label,
+      }));
+
+      return {
+        title: section.title,
+        features,
+      };
     });
   }, []);
 
@@ -143,30 +202,45 @@ export default function RoleBaseAccessPage() {
     if (!isEditMode) return;
     setPermissions((prev: any) => ({
       ...prev,
-      [featureKey]: { ...blankPermissions(), ...(prev[featureKey] || {}), [action]: enabled },
+      [featureKey]: {
+        ...blankPermissions(),
+        ...(prev[featureKey] || {}),
+        [action]: enabled,
+      },
     }));
   };
 
   const handleSaveMapping = async () => {
-    if (!selectedSiteId || !selectedRoleId) return;
+    if (!selectedZoneId || !selectedRoleId) return;
     
+    const headers = getAuthHeaders();
+    if (!headers) return;
+
     try {
-      const res = await fetch(`${API_BASE_URL}/setups/role-access-mappings/sync_mapping/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          role_id: selectedRoleId,
-          site_id: selectedSiteId,
-          permissions: permissions
-        })
-      });
+      const res = await fetch(
+        `${API_BASE_URL}/setups/role-access-mappings/sync_mapping/`,
+        {
+          method: "POST",
+          headers: headers, // 🌟 FIXED: Attached headers here to solve the 500 error!
+          body: JSON.stringify({
+            role_id: selectedRoleId,
+            zone_id: selectedZoneId,
+            permissions,
+          }),
+        }
+      );
 
       if (res.ok) {
         setStatusMessage("Permissions securely saved and applied.");
         setIsSuccess(true);
         setIsEditMode(false);
-        fetchAllMappings(); // Refresh the top table instantly!
-        setTimeout(() => { setStatusMessage(""); setIsSuccess(false); }, 4000);
+
+        fetchAllMappings();
+
+        setTimeout(() => {
+          setStatusMessage("");
+          setIsSuccess(false);
+        }, 4000);
       } else {
         setStatusMessage("Failed to save permissions.");
         setIsSuccess(false);
@@ -197,186 +271,203 @@ export default function RoleBaseAccessPage() {
     setPermissions(next);
   };
 
-  // Helper to get Site Name for the table
-  const getSiteName = (id: string) => {
-    const site = sites.find(s => String(s.id) === String(id));
-    return site ? site.siteName : `Site ID: ${id}`;
-  };
-
-  // Helper to count active permissions
-  const countActivePermissions = (permsObj: any) => {
-    if (!permsObj) return 0;
-    return Object.values(permsObj).filter((p: any) => Object.values(p).some(val => val === true)).length;
-  };
-
-  if (loading) return <MainLayout><div className="flex justify-center items-center h-[60vh] text-slate-500 font-medium"><Loader2 className="w-6 h-6 animate-spin mr-2"/> Loading Configurations...</div></MainLayout>;
-
-  const hasNoPermissions = Object.keys(permissions).length === 0;
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="flex justify-center items-center h-[60vh] text-slate-500 font-medium">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          Loading Configurations...
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-black uppercase text-slate-900 tracking-tight flex items-center gap-2">
-            <ShieldCheck className="w-8 h-8 text-primary" /> Role Based Access
-          </h1>
-          <p className="text-muted-foreground mt-1 font-medium">Dynamically configure module access for organizational roles.</p>
-        </div>
-      </div>
-
-      {/* --- NEW OVERVIEW TABLE: Shows who currently has access! --- */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-8">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
-          <Users className="w-5 h-5 text-slate-500" />
-          <h2 className="font-bold text-slate-800 uppercase tracking-tight">Active Role Assignments</h2>
-        </div>
-        <div className="overflow-x-auto max-h-60">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-white sticky top-0 z-10 font-black uppercase text-[10px] text-slate-500 border-b border-slate-200">
-              <tr>
-                <th className="p-4">Target Site</th>
-                <th className="p-4">Assigned Role</th>
-                <th className="p-4">Features Granted</th>
-                <th className="p-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {allMappings.length === 0 ? (
-                <tr><td colSpan={4} className="p-6 text-center text-slate-500 font-medium">No roles have been assigned permissions yet.</td></tr>
-              ) : (
-                allMappings.map((mapItem) => (
-                  <tr key={mapItem.id} className="hover:bg-slate-50/50">
-                    <td className="p-4 font-bold text-slate-800">{getSiteName(mapItem.site_id)}</td>
-                    <td className="p-4 font-bold text-primary">{mapItem.role_name || `Role ID: ${mapItem.role}`}</td>
-                    <td className="p-4">
-                      <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-xs font-bold">
-                        {countActivePermissions(mapItem.permissions)} Active Modules
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="gap-2"
-                        onClick={() => {
-                          setSelectedSiteId(String(mapItem.site_id));
-                          setSelectedRoleId(String(mapItem.role));
-                          window.scrollTo({ top: 400, behavior: "smooth" });
-                        }}
-                      >
-                        <Pencil className="w-3 h-3" /> Edit
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+      <div className="space-y-6 max-w-6xl mx-auto p-2 pb-12">
+        
+        {/* Header Title Section & Status Feedback Message */}
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <label className="font-bold text-xs uppercase text-slate-500 mb-2 block">1. Select Target Site</label>
-            <Select value={selectedSiteId} onValueChange={(v) => { setSelectedSiteId(v); setSelectedRoleId(""); }}>
-              <SelectTrigger className="border-slate-300"><SelectValue placeholder="Choose a site..." /></SelectTrigger>
-              <SelectContent>
-                {sites.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.siteName}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <ShieldCheck className="w-6 h-6 text-indigo-600" /> Role Based Access Matrix
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Configure fine-grained page actions and setup feature permissions by operating zone and user role.
+            </p>
           </div>
-          <div>
-            <label className="font-bold text-xs uppercase text-slate-500 mb-2 block">2. Select Role</label>
-            <Select value={selectedRoleId} onValueChange={setSelectedRoleId} disabled={!selectedSiteId}>
-              <SelectTrigger className={cn("border-slate-300", !selectedSiteId && "bg-slate-50")}><SelectValue placeholder="Choose an organizational role..." /></SelectTrigger>
-              <SelectContent>
-                {roles.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.role_name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
-          <Button variant={isEditMode ? "destructive" : "outline"} onClick={() => setIsEditMode(!isEditMode)} disabled={!selectedSiteId || !selectedRoleId || isFetchingPermissions}>
-            {isEditMode ? "Cancel Editing" : "Enable Edit Mode"}
-          </Button>
-          <Button variant="outline" onClick={handleSelectAll} disabled={!isEditMode || !selectedRoleId}>Grant All</Button>
-          <Button variant="outline" onClick={handleClearAll} disabled={!isEditMode || !selectedRoleId}>Revoke All</Button>
-          <div className="flex-1" />
           
           {statusMessage && (
-            <span className={cn("text-sm font-bold flex items-center gap-2 px-4 py-2 rounded-full transition-all", isSuccess ? "text-emerald-700 bg-emerald-50" : "text-red-700 bg-red-50")}>
-              {isSuccess && <CheckCircle2 className="w-4 h-4"/>} {statusMessage}
-            </span>
-          )}
-          
-          <Button className="gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold transition-all" onClick={handleSaveMapping} disabled={!isEditMode || !selectedRoleId}>
-            <Save className="w-4 h-4" /> Save Permissions
-          </Button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative">
-        {isFetchingPermissions && (
-          <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-slate-600 font-bold">
-            <Loader2 className="w-8 h-8 animate-spin mb-2 text-primary"/>
-            Fetching Role Data...
-          </div>
-        )}
-
-        {!selectedSiteId || !selectedRoleId ? (
-          <div className="p-12 text-center text-slate-500 font-medium">Please select a Site and a Role to view or edit permissions.</div>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 font-black uppercase text-[11px] text-slate-500 border-b">
-              <tr>
-                <th className="p-4">Module / Feature</th>
-                {ACTION_KEYS.map(act => <th key={act} className="p-4 text-center">{act}</th>)}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              
-              {!isEditMode && hasNoPermissions && !isFetchingPermissions && (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center bg-amber-50/50">
-                    <p className="text-amber-800 font-bold mb-1">No permissions are assigned to this role yet.</p>
-                    <p className="text-amber-700/80 text-xs">Click "Enable Edit Mode" above to start configuring access.</p>
-                  </td>
-                </tr>
+            <div
+              className={cn(
+                "px-4 py-2 rounded-md flex items-center gap-2 text-sm font-medium transition-all shadow-sm border",
+                isSuccess 
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                  : "bg-red-50 text-red-700 border-red-200"
               )}
+            >
+              {isSuccess ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <Loader2 className="w-4 h-4 animate-spin text-red-600" />}
+              {statusMessage}
+            </div>
+          )}
+        </div>
 
-              {siteModuleGroups.map((group) => (
-                <React.Fragment key={group.title}>
-                  <tr className="bg-slate-50/80 border-y border-slate-200">
-                    <td className="p-3 font-black text-slate-800 uppercase text-xs tracking-wider" colSpan={6}>{group.title}</td>
-                  </tr>
-                  {group.features.map((feature: any) => {
-                    const fPerms = permissions[feature.key] || blankPermissions();
-                    return (
-                      <tr key={feature.key} className={cn("transition-colors", isEditMode ? "hover:bg-slate-50" : "opacity-80")}>
-                        <td className="p-4 font-medium text-slate-700 pl-8 border-r border-slate-100">{feature.label}</td>
-                        {ACTION_KEYS.map((action) => (
-                          <td key={`${feature.key}-${action}`} className="p-4 text-center">
-                            <input 
-                              type="checkbox" 
-                              className={cn(
-                                "w-4 h-4 rounded transition-all",
-                                isEditMode ? "cursor-pointer accent-primary" : "cursor-not-allowed grayscale opacity-50"
-                              )}
-                              checked={!!fPerms[action]} 
-                              onChange={(e) => togglePermission(feature.key, action, e.target.checked)}
-                              disabled={!isEditMode}
-                            />
+        {/* Operating Zone & Role Selection Dropdowns Row */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700">Select Operating Zone</label>
+            <Select value={selectedZoneId} onValueChange={setSelectedZoneId}>
+              <SelectTrigger className="bg-slate-50 border-slate-200 w-full">
+                <SelectValue placeholder="Choose an operating zone..." />
+              </SelectTrigger>
+              <SelectContent>
+                {zones.map((z) => (
+                  <SelectItem key={z.id} value={String(z.id)}>
+                    {z.zone_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700">Select Role</label>
+            <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
+              <SelectTrigger className="bg-slate-50 border-slate-200 w-full">
+                <SelectValue placeholder="Choose a user role..." />
+              </SelectTrigger>
+              <SelectContent>
+                {roles.map((r) => (
+                  <SelectItem key={r.id} value={String(r.id)}>
+                    {r.name || r.role_name || r.title || `Role ID: ${r.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Permissions Data Grid Matrix Matrix Box */}
+        {selectedZoneId && selectedRoleId ? (
+          isFetchingPermissions ? (
+            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-slate-200 shadow-sm">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
+              <p className="text-sm text-slate-500 font-medium">Fetching access mapping permissions...</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              {/* Matrix Table Toolbar Controls */}
+              <div className="bg-slate-50 p-4 border-b border-slate-200 flex justify-between items-center flex-wrap gap-4">
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleSelectAll} 
+                    disabled={!isEditMode}
+                    className="text-xs bg-white border-slate-200 hover:bg-slate-50"
+                  >
+                    Select All Actions
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleClearAll} 
+                    disabled={!isEditMode}
+                    className="text-xs bg-white border-slate-200 hover:bg-slate-50 text-red-600 hover:text-red-700"
+                  >
+                    Clear All
+                  </Button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {!isEditMode ? (
+                    <Button 
+                      onClick={() => setIsEditMode(true)} 
+                      className="gap-2 bg-slate-900 text-white hover:bg-slate-800 text-xs px-4"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Edit Matrix Permissions
+                    </Button>
+                  ) : (
+                    <>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setIsEditMode(false)}
+                        className="text-xs bg-white border-slate-200"
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={handleSaveMapping} 
+                        className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 shadow-sm"
+                      >
+                        <Save className="w-3.5 h-3.5" /> Save Configuration
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Access Grid Data Matrix Table Element */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm min-w-[700px]">
+                  <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="p-4 border-r border-slate-200 w-2/5">Feature / Page Module</th>
+                      {ACTION_KEYS.map((action) => (
+                        <th key={action} className="p-4 text-center capitalize border-r border-slate-200 last:border-r-0">
+                          {action}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {siteModuleGroups.map((group) => (
+                      <React.Fragment key={group.title}>
+                        {/* Section Header Row Label */}
+                        <tr className="bg-slate-50/80 border-b border-slate-200">
+                          <td colSpan={ACTION_KEYS.length + 1} className="p-3 font-bold text-slate-800 tracking-wide bg-slate-100/50">
+                            {group.title}
                           </td>
+                        </tr>
+                        {/* Individual Item Module Action Checkbox Rows */}
+                        {group.features.map((feature) => (
+                          <tr key={feature.key} className="hover:bg-slate-50/80 transition-colors border-b border-slate-200 last:border-0">
+                            <td className="p-4 border-r border-slate-200 font-medium text-slate-700 pl-8">
+                              {feature.label}
+                            </td>
+                            {ACTION_KEYS.map((action) => {
+                              const isChecked = permissions[feature.key]?.[action] === true;
+                              return (
+                                <td key={action} className="p-4 text-center border-r border-slate-200 last:border-r-0">
+                                  <input
+                                    type="checkbox"
+                                    disabled={!isEditMode}
+                                    checked={isChecked}
+                                    onChange={(e) => togglePermission(feature.key, action, e.target.checked)}
+                                    className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed transition-all"
+                                  />
+                                </td>
+                              );
+                            })}
+                          </tr>
                         ))}
-                      </tr>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        ) : (
+          /* Empty/Initial Selection State Window */
+          <div className="text-center py-20 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-500 flex flex-col items-center justify-center p-4">
+            <Users className="w-12 h-12 text-slate-300 mb-3" />
+            <p className="font-semibold text-lg text-slate-700">No Zone or Role Selected</p>
+            <p className="text-sm text-slate-400 mt-1 max-w-sm">
+              Please choose both an operating zone and a user role from the controls above to view or modify the active access matrix grid.
+            </p>
+          </div>
         )}
       </div>
     </MainLayout>

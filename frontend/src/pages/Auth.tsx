@@ -29,7 +29,6 @@ export default function Auth() {
     setIsLoading(true);
     setError("");
 
-    // 🌟 FIXED: Added "/api" prefix to match your root Django urls.py path configuration
     const endpoint = isLogin ? "/setups/auth/login/" : "/setups/auth/register/";
     
     try {
@@ -42,18 +41,25 @@ export default function Auth() {
       const data = await response.json();
 
       if (response.ok) {
-        // Save the Token and User data to LocalStorage (matches the App.tsx RoleGuard keys)
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("user", JSON.stringify(data.user));
+        // 🌟 FIXED: Changed 'response.token' to 'data.token' to resolve the TS(2339) property error
+        if (data.token) {
+          localStorage.setItem("token", data.token);
+        }
         
-        // 🚦 THE REDIRECT SPLIT: Send users where they belong based on their role
-        if (data.user.is_superuser) {
-          navigate("/dashboard"); // Admin goes to Admin Command Center
+        if (data.user) {
+          localStorage.setItem("user", JSON.stringify(data.user));
+          
+          // 🚦 THE REDIRECT SPLIT: Send users where they belong based on their role
+          if (data.user.is_superuser) {
+            navigate("/dashboard"); // Admin goes to Admin Command Center
+          } else {
+            navigate("/technician/requests"); // Technician goes to their assigned task dashboard
+          }
         } else {
-          navigate("/technician/requests"); // Technician goes to their assigned task dashboard
+          setError("User details missing from server response.");
         }
       } else {
-        setError(data.error || "Authentication failed. Please try again.");
+        setError(data.error || data.detail || "Authentication failed. Please try again.");
       }
     } catch (err) {
       setError("Network error. Please check your connection.");
@@ -67,7 +73,7 @@ export default function Auth() {
       
       {/* LEFT SIDE: Branding / Visuals */}
       <div className="hidden lg:flex flex-col justify-between w-1/2 bg-slate-900 p-12 text-white relative overflow-hidden">
-        {/* Background Decorative Element */}
+        {/* Background Decorative Elements */}
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-red-600 rounded-full blur-[100px] opacity-20" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-primary rounded-full blur-[100px] opacity-20" />
 
@@ -128,7 +134,7 @@ export default function Auth() {
             <form onSubmit={handleSubmit} className="space-y-4">
               
               <div className="space-y-1 relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
                 <Input 
                   name="username"
                   placeholder="Username" 
@@ -147,7 +153,7 @@ export default function Auth() {
                     exit={{ opacity: 0, height: 0 }}
                     className="space-y-1 relative"
                   >
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
                     <Input 
                       name="email"
                       type="email"
@@ -162,7 +168,7 @@ export default function Auth() {
               </AnimatePresence>
 
               <div className="space-y-1 relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
                 <Input 
                   name="password"
                   type="password"
@@ -185,7 +191,7 @@ export default function Auth() {
               <Button 
                 type="submit" 
                 disabled={isLoading}
-                className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold uppercase tracking-wide mt-4"
+                className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold uppercase tracking-wide mt-4 flex items-center justify-center"
               >
                 {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLogin ? "Sign In" : "Register")}
                 {!isLoading && <ArrowRight className="w-4 h-4 ml-2" />}

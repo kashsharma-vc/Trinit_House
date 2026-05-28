@@ -66,7 +66,8 @@ from django.db.models import JSONField # To store the permission checkboxes
 class RoleAccessMapping(SetupMaster):
     role = models.ForeignKey('Role', on_delete=models.CASCADE, related_name='access_mappings')
     site_id = models.CharField(max_length=50) # Stores the ID of the selected site
-    permissions = JSONField(default=dict) # Stores { "core:my_tickets": { "view": true, "create": false } }
+    permissions = JSONField(default=dict, blank=True) # Stores { "core:my_tickets": { "view": true, "create": false } }
 
     def __str__(self):
         return f"{self.role.role_name} - Site: {self.site_id}"
+

@@ -1,50 +1,61 @@
 from rest_framework import serializers
-from .models import ChecklistItem, SOPStage, ServiceRequest
-
-class ServiceRequestSerializer(serializers.ModelSerializer):
-    # Grab the readable names from the linked models
-    zone_name = serializers.CharField(source='zone.zone_name', read_only=True)
-    workshop_name = serializers.CharField(source='workshop.workshop_name', read_only=True)
-    compressor_type = serializers.CharField(source='compressor.compressor_type', read_only=True)
-
-    class Meta:
-        model = ServiceRequest
-        fields = '__all__' # Sends all model fields plus the 3 custom ones above
-
-from .models import PenaltyCase
+from .models import ChecklistItem, SOPStage, ServiceRequest, PenaltyCase
 
 class PenaltyCaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = PenaltyCase
         fields = '__all__'
 
-# In operations/serializers.py
 class ChecklistItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChecklistItem
         fields = '__all__'
 
 class SOPStageSerializer(serializers.ModelSerializer):
-    checklist = ChecklistItemSerializer(many=True, read_only=True) # Nests the checklist
+    checklist = ChecklistItemSerializer(many=True, read_only=True)
 
     class Meta:
         model = SOPStage
         fields = '__all__'
 
 class ServiceRequestSerializer(serializers.ModelSerializer):
-    # Grab the readable names from the linked models
-    zone_name = serializers.CharField(source='zone.zone_name', read_only=True)
-    workshop_name = serializers.CharField(source='workshop.workshop_name', read_only=True)
-    compressor_type = serializers.CharField(source='compressor.compressor_type', read_only=True)
-    
-    # 🟢 REMOVE the old stages line and REPLACE with this method field to guarantee order
+    zone_name = serializers.SerializerMethodField()
+    workshop_name = serializers.SerializerMethodField()
+    compressor_type = serializers.SerializerMethodField()
     stages = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceRequest
         fields = '__all__'
 
-    # 🟢 THIS GUARANTEES STAGES GO IN PERFECT LINEAR SEQUENCE FROM 1 TO 10
+    def get_zone_name(self, obj):
+        return obj.zone.zone_name if obj.zone else "Unassigned"
+
+    def get_workshop_name(self, obj):
+        return obj.workshop.workshop_name if obj.workshop else "Unassigned"
+
+    def get_compressor_type(self, obj):
+        return obj.compressor.compressor_type if obj.compressor else "Unknown"
+
     def get_stages(self, instance):
         ordered_stages = instance.stages.all().order_by('sequence')
-        return SOPStageSerializer(ordered_stages, many=True, context=self.context).data
+        return SOPStageSerializer(ordered_stages, many=True).data
+
+    def to_internal_value(self, data):
+        # Create a mutable copy of the incoming data
+        mutable_data = data.copy()
+        
+        # Safely map frontend IDs and convert empty strings to None (null)
+        if 'zone_id' in mutable_data:
+            val = mutable_data.pop('zone_id')
+            mutable_data['zone'] = val if val else None
+            
+        if 'workshop_id' in mutable_data:
+            val = mutable_data.pop('workshop_id')
+            mutable_data['workshop'] = val if val else None
+            
+        if 'compressor_id' in mutable_data:
+            val = mutable_data.pop('compressor_id')
+            mutable_data['compressor'] = val if val else None
+            
+        return super().to_internal_value(mutable_data)

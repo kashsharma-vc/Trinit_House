@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom"; // <-- NEW IMPORT
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Bell, Search, User, Calendar, MapPin, Settings2, CheckCircle } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api";
@@ -19,23 +19,42 @@ interface HeaderProps {
 }
 
 export function Header({ onFilterChange }: HeaderProps) {
-  const navigate = useNavigate(); // <-- NEW INITIALIZATION
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);
+
+  // 1. Retrieve the active user
+  const userString = localStorage.getItem("user");
+  const user = userString ? JSON.parse(userString) : { username: "Guest", is_superuser: false };
 
   // Fetch Notifications
   useEffect(() => {
     const fetchNotifications = async () => {
+      // 1. Get the token
+      const token = localStorage.getItem("token") || localStorage.getItem("authToken");
+      if (!token) return;
+  
       try {
-        const res = await fetch(`${API_BASE_URL}/notifications/list/`);
-        if (res.ok) {
-          const data = await res.json();
+        // 2. Add the token to the fetch headers
+        const response = await fetch(`${API_BASE_URL}/notifications/list/`, {
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Token ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
           setNotifications(data.notifications || []);
         }
-      } catch (err) {
-        console.log("Notification service offline.");
+      } catch (error) {
+        console.error("Failed to fetch notifications:", error);
       }
     };
+  
     fetchNotifications();
+    // Optional: Set up an interval to poll for notifications every minute
+    // const interval = setInterval(fetchNotifications, 60000);
+    // return () => clearInterval(interval);
   }, []);
 
   return (
@@ -85,19 +104,39 @@ export function Header({ onFilterChange }: HeaderProps) {
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="gap-2 px-2"><User className="w-4 h-4" /></Button>
+              <Button variant="ghost" className="gap-2 px-2">
+                <div className="hidden md:block text-right mr-1">
+                  <p className="text-sm font-bold leading-none">{user.username}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {user.is_superuser ? "Administrator" : "Technician"}
+                  </p>
+                </div>
+                <User className="w-4 h-4" />
+              </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Admin User</DropdownMenuLabel>
-              <DropdownMenuItem className="cursor-pointer">Profile</DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-56">
+              {/* Dynamic User Label */}
+              <DropdownMenuLabel>
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">{user.username}</p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {user.is_superuser ? "Administrator Account" : "Service Technician Account"}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
               
-              {/* <-- UPDATED LOGOUT BUTTON --> */}
+              <DropdownMenuItem className="cursor-pointer">Profile Settings</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              
+              {/* Secure Logout */}
               <DropdownMenuItem 
                 className="text-red-600 font-bold cursor-pointer"
                 onClick={() => {
-                  localStorage.removeItem("authToken");
+                  // 🌟 FIXED: Changed "authToken" to "token" to match Auth.tsx
+                  localStorage.removeItem("token"); 
                   localStorage.removeItem("user");
-                  navigate("/login");
+                  navigate("/login"); // or whatever your login route is named
                 }}
               >
                 Log out

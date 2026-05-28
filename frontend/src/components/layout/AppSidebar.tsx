@@ -9,27 +9,42 @@ import {
   FileCheck,
   PhoneCall,
   Settings,
-  ShieldCheck, // Imported the new icon for Role Access
+  ShieldCheck,
   ChevronLeft,
   ChevronRight,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import trinityLogo from "@/assets/trinity-house-logo.png";
 
-const navItems = [
-  { title: "Dashboard", path: "/", icon: LayoutDashboard },
-  { title: "New Request", path: "/requests", icon: FileText },
-  { title: "Inventory", path: "/inventory", icon: Package },
-  { title: "Penalty War Room", path: "/penalty", icon: AlertTriangle },
-  { title: "Invoice & Closure", path: "/invoice", icon: FileCheck },
-  { title: "Warranty Calls", path: "/warranty", icon: PhoneCall },
-  { title: "Role Access", path: "/role-access", icon: ShieldCheck }, // <-- NEW MENU ITEM ADDED HERE
-  { title: "Setup", path: "/setup", icon: Settings },
-];
-
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+
+  // 1. Get the current user role from local storage
+  const userString = localStorage.getItem("user");
+  const user = userString ? JSON.parse(userString) : null;
+  const isSuperAdmin = user?.is_superuser === true;
+
+  // 2. Define Admin vs Technician Links
+  const adminLinks = [
+    // 🌟 FIXED: Changed path from "/" to "/dashboard" to stop the login redirect loop
+    { title: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+    { title: "New Request", path: "/requests", icon: FileText },
+    { title: "Inventory", path: "/inventory", icon: Package },
+    { title: "Penalty War Room", path: "/penalty", icon: AlertTriangle },
+    { title: "Invoice & Closure", path: "/invoice", icon: FileCheck },
+    { title: "Warranty Calls", path: "/warranty", icon: PhoneCall },
+    { title: "Role Access", path: "/role-access", icon: ShieldCheck },
+    { title: "Setup", path: "/setup", icon: Settings },
+  ];
+
+  const technicianLinks = [
+    { title: "My Assigned Tasks", path: "/technician/requests", icon: Wrench },
+  ];
+
+  // 3. Select the correct links based on role
+  const navItems = isSuperAdmin ? adminLinks : technicianLinks;
 
   return (
     <motion.aside
@@ -56,11 +71,27 @@ export function AppSidebar() {
         )}
       </div>
 
+      {/* Role Indicator (Hidden when collapsed) */}
+      {!collapsed && (
+        <div className="px-6 py-3 border-b border-sidebar-border/50 bg-background/5">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Current Portal</p>
+          <div className="flex items-center gap-2">
+            <div className={cn("w-2 h-2 rounded-full", isSuperAdmin ? "bg-primary" : "bg-emerald-500")} />
+            <span className={cn("text-xs font-bold", isSuperAdmin ? "text-primary" : "text-emerald-500")}>
+              {isSuperAdmin ? "Command Center" : "Execution Deck"}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Navigation */}
       <nav className="flex-1 py-4 px-3 overflow-y-auto">
         <ul className="space-y-1">
           {navItems.map((item, index) => {
-            const isActive = location.pathname === item.path;
+            // 🌟 FIXED: Better active state matching so nested routes highlight correctly
+            const isActive = location.pathname === item.path || 
+                             (item.path !== "/" && location.pathname.startsWith(`${item.path}/`));
+            
             const Icon = item.icon;
 
             return (

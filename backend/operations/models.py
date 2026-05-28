@@ -1,10 +1,11 @@
-# Create your models here.
+import random
+import datetime
 from django.db import models
-from setups.models import Zone, Workshop, Compressor 
+from django.utils import timezone
 from django.conf import settings
-import uuid
+from setups.models import Zone, Workshop, Compressor 
+
 class ServiceRequest(models.Model):
-    # Standard choice definitions for dropdowns
     PRIORITY_CHOICES = [
         ('Low', 'Low'),
         ('Medium', 'Medium'),
@@ -18,105 +19,67 @@ class ServiceRequest(models.Model):
     ]
     TYPE_CHOICES = [
         ('Repair', 'Repair'),
-        ('Inspection', 'Inspection'),
+        ('Inspection', 'Inspection'), 
         ('Warranty', 'Warranty'),
     ]
 
-    # Auto-generate a unique ID string (like REQ-2024-0456)
     request_id = models.CharField(max_length=50, unique=True, blank=True)
     request_date = models.DateField(auto_now_add=True)
     
-    # Linking to your Setup Masters!
-    zone = models.ForeignKey(Zone, on_delete=models.SET_NULL, null=True)
-    workshop = models.ForeignKey(Workshop, on_delete=models.SET_NULL, null=True)
-    compressor = models.ForeignKey(Compressor, on_delete=models.SET_NULL, null=True)
+    # Linked setup masters
+    zone = models.ForeignKey(Zone, on_delete=models.SET_NULL, null=True, blank=True)
+    workshop = models.ForeignKey(Workshop, on_delete=models.SET_NULL, null=True, blank=True)
+    compressor = models.ForeignKey(Compressor, on_delete=models.SET_NULL, null=True, blank=True)
     
-    # Request Details
-    request_type = models.CharField(max_length=50, choices=TYPE_CHOICES)
+    # Assigned Technician Field
+    assigned_to = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Request details
+    request_type = models.CharField(max_length=50, choices=TYPE_CHOICES, default='Repair')
+    compressor_model = models.CharField(max_length=100, blank=True, null=True)
+    serial_number = models.CharField(max_length=100, blank=True, null=True)
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='Medium')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Draft')
-    description = models.TextField(blank=True, null=True)
-    attachment = models.FileField(upload_to='requests/attachments', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
     
-    # Equipment specifics
-    compressor_model = models.CharField(max_length=100, blank=True)
-    serial_number = models.CharField(max_length=100, blank=True)
-    
-    # SLA Tracking
-    expected_date = models.DateField(null=True, blank=True)
+    # SLA Fields
     sla_tat_days = models.IntegerField(default=14)
+    expected_date = models.DateField(blank=True, null=True)
+    
+    sla_days = models.IntegerField(default=3, help_text="SLA timeline limit in days")
+    expected_completion_date = models.DateTimeField(blank=True, null=True)
+    assigned_role = models.CharField(max_length=50, blank=True, null=True)
 
     def save(self, *args, **kwargs):
-        # If the request_id is empty, we are creating a brand new record
+        # 1. Generate Request ID automatically
         if not self.request_id:
-            # 1. Generate a random, temporary ID to bypass the Unique constraint
-            self.request_id = f"TEMP-{uuid.uuid4().hex[:8]}"
-            
-            # 2. First save to get the real database primary key (self.id)
-            super().save(*args, **kwargs) 
-            
-            # 3. Generate the real, formatted ID string
-            self.request_id = f"REQ-2026-{self.id:04d}"
-            
-            # 4. Remove force_insert so Django updates the row instead of creating a new one
-            kwargs.pop('force_insert', None)
-            super().save(*args, **kwargs)
-        else:
-            # Normal save if we are just editing an existing request
-            super().save(*args, **kwargs)
+            year = timezone.now().year
+            random_num = random.randint(1000, 9999)
+            self.request_id = f"REQ-{year}-{random_num}"
+        
+        # 2. Calculate the Expected Date based on standard TAT
+        if not self.expected_date:
+            self.expected_date = timezone.now().date() + datetime.timedelta(days=int(self.sla_tat_days or 14))
 
-from django.conf import settings
+        # 3. Calculate DateTime completion deadline
+        if not self.expected_completion_date:
+            self.expected_completion_date = timezone.now() + timezone.timedelta(days=int(self.sla_days or 3))
 
-class Notification(models.Model):
-    # If you have custom users, use settings.AUTH_USER_MODEL
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
-    message = models.CharField(max_length=255)
-    is_read = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+        super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.message} - {'Read' if self.is_read else 'Unread'}"
+        return f"{self.request_id} - {self.request_type}"
 
-
-class WarrantyCall(models.Model):
-    # Statuses
-    STATUS_CHOICES = [('Urgent', 'Urgent'), ('Normal', 'Normal'), ('Pending', 'Pending'), ('Closed', 'Closed')]
-    ROLE_CHOICES = [('Financer', 'Financer'), ('Sales', 'Sales'), ('Marketing', 'Marketing'), ('Technician', 'Technician')]
-
-    call_id = models.CharField(max_length=50, unique=True)
-    equipment = models.CharField(max_length=100)
-    serial_number = models.CharField(max_length=100)
-    vendor = models.CharField(max_length=100)
-    issue = models.TextField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
-    stage = models.CharField(max_length=50, default='Logged')
-    
-    # Assignment Fields
-    assigned_role = models.CharField(max_length=20, choices=ROLE_CHOICES, null=True, blank=True)
-    assigned_to = models.CharField(max_length=100, null=True, blank=True) # Name of person
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-
-from django.db import models
-from django.utils import timezone
-import random
-
-# ... [Your existing Invoice models are up here] ...
 
 class PenaltyCase(models.Model):
-    ZONE_CHOICES = [('Northern', 'Northern'), ('Southern', 'Southern'), ('Western', 'Western'), ('Eastern', 'Eastern'), ('Central', 'Central')]
-    STATUS_CHOICES = [('Open', 'Open'), ('In Review', 'In Review'), ('Resolved', 'Resolved')]
-
-    id = models.CharField(max_length=20, primary_key=True, editable=False) # e.g., JOB-2024-0123
-    zone = models.CharField(max_length=50, choices=ZONE_CHOICES, default='Northern')
-    location = models.CharField(max_length=100, blank=True, null=True)
-    workshop = models.CharField(max_length=100)
+    STATUS_CHOICES = [
+        ('Open', 'Open'),
+        ('Closed', 'Closed'),
+    ]
     vendor = models.CharField(max_length=100)
-    reason = models.TextField()
-    
+    zone = models.CharField(max_length=50)
+    workshop = models.CharField(max_length=100)
     delayed = models.IntegerField(default=0, help_text="Number of days delayed")
     penaltyRisk = models.IntegerField(default=0, help_text="Amount at risk in Rupees")
-    
     assignedTo = models.CharField(max_length=100, blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Open')
     loggedDate = models.DateField(auto_now_add=True)
@@ -130,41 +93,48 @@ class PenaltyCase(models.Model):
 
     def __str__(self):
         return f"{self.id} - {self.vendor}"
-    
-    # 1. The Stage Model
-# 1. The Stage Model
+
+
 class SOPStage(models.Model):
     service_request = models.ForeignKey(ServiceRequest, related_name='stages', on_delete=models.CASCADE)
-    name = models.CharField(max_length=100) # e.g., "Pre-Inspection"
-    purpose = models.TextField(blank=True, null=True)  # 🟢 Added field
-    status = models.CharField(max_length=20, default="pending") # pending, active, completed
-    sequence = models.IntegerField(default=1)  # 🟢 Added field
+    name = models.CharField(max_length=100)
+    purpose = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=20, default="pending")
+    sequence = models.IntegerField(default=1)
     labor_time = models.CharField(max_length=50, blank=True, null=True)
 
     def __str__(self):
         return f"{self.name} - Stage {self.sequence} ({self.status})"
+    
 
-# 2. The Checklist Item Model
-class ChecklistItem(models.Model):
-    stage = models.ForeignKey(SOPStage, related_name='checklist', on_delete=models.CASCADE)
-    text = models.CharField(max_length=255) # e.g., "Verify lifting points"
-    completed = models.BooleanField(default=False)
-    completed_by = models.ForeignKey(
-    settings.AUTH_USER_MODEL, 
-    on_delete=models.SET_NULL, 
-    null=True, 
-    blank=True, 
-    related_name='completed_checklist_items')
-    completed_at = models.DateTimeField(blank=True, null=True) # 🟢 Added field
-    labor_time = models.CharField(max_length=50, blank=True, null=True) # 🟢 Added field
-    
-    # Validation Rules
-    attachment_label = models.CharField(max_length=100, blank=True, null=True) # 🟢 Added field
-    requires_doc = models.BooleanField(default=False) # 🟢 Added field
-    requires_photo = models.BooleanField(default=False) # 🟢 Added field
-    
-    # Live File Evidence
-    attachment = models.FileField(upload_to='checklist/attachments/', blank=True, null=True) # 🟢 Added field
+class Notification(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='notifications')
+    message = models.CharField(max_length=255)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.text} - {'Done' if self.completed else 'Pending'}"
+        return f"{self.user.username if self.user else 'System'} - {self.message}"
+
+
+class ChecklistItem(models.Model):
+    stage = models.ForeignKey(SOPStage, related_name='checklist', on_delete=models.CASCADE)
+    text = models.CharField(max_length=255)
+    completed = models.BooleanField(default=False)
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='completed_checklist_items'
+    )
+    completed_at = models.DateTimeField(blank=True, null=True)
+    labor_time = models.CharField(max_length=50, blank=True, null=True)
+    attachment_label = models.CharField(max_length=100, blank=True, null=True)
+    requires_doc = models.BooleanField(default=False)
+    requires_photo = models.BooleanField(default=False)
+    attachment = models.FileField(upload_to='attachments/', blank=True, null=True)
+    note = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.text} - Completed: {self.completed}"
