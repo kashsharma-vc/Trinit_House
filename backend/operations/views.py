@@ -190,6 +190,12 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
             if "attachment" in request.FILES:
                 item.attachment = request.FILES["attachment"]
 
+            if completed and (item.requires_doc or item.requires_photo) and not item.attachment:
+                return Response(
+                    {"error": "Attachment is mandatory to complete this checklist item."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             item.save()
 
             current_stage = item.stage
@@ -210,6 +216,9 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
                 if next_stage:
                     next_stage.status = "active"
                     next_stage.save()
+                else:
+                    service_request.status = "Closed"
+                    service_request.save()
             else:
                 current_stage.status = "active"
                 current_stage.save()
@@ -233,6 +242,7 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
 class PenaltyCaseViewSet(viewsets.ModelViewSet):
     queryset = PenaltyCase.objects.all().order_by("-loggedDate")
     serializer_class = PenaltyCaseSerializer
+    authentication_classes = [TokenAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticated]
 
 
@@ -277,6 +287,7 @@ def notification_list_view(request):
 class ChecklistItemViewSet(viewsets.ModelViewSet):
     queryset = ChecklistItem.objects.all()
     serializer_class = ChecklistItemSerializer
+    authentication_classes = [TokenAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticated]
     parser_classes = [parsers.MultiPartParser, parsers.FormParser, parsers.JSONParser]
 

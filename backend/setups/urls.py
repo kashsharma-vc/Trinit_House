@@ -4,7 +4,7 @@ from setups import views
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import LoginView, RegisterView, RoleAccessMappingViewSet, RoleViewSet, ZoneViewSet, WorkshopViewSet, CategoryViewSet ,  CompressorViewSet
-
+from setups.views import FeatureMasterViewSet, AppFeatureViewSet
 
 # The DefaultRouter automatically wires up all the URLs for our ViewSets
 router = DefaultRouter()
@@ -14,6 +14,8 @@ router.register(r'workshops', WorkshopViewSet)
 router.register(r'categories', CategoryViewSet)
 router.register(r'compressors', CompressorViewSet)
 router.register(r'role-access-mappings', RoleAccessMappingViewSet, basename='role-access-mappings')
+router.register(r'features-master', FeatureMasterViewSet, basename='features-master')
+router.register(r'app-features', AppFeatureViewSet, basename='app-features')
 urlpatterns = [
     path('', include(router.urls)),
     path('auth/login/', LoginView.as_view(), name='auth_login'),

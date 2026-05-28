@@ -46,3 +46,22 @@ class RoleAccessMappingSerializer(serializers.ModelSerializer):
     class Meta:
         model = RoleAccessMapping
         fields = ['id', 'role', 'role_name' ,'site_id', 'permissions']
+
+from .models import AppModule, AppFeature
+
+# setups/serializers.py
+from .models import AppFeature, AppModule
+
+class AppFeatureSerializer(serializers.ModelSerializer):
+    key = serializers.CharField(source='feature_key', read_only=True)
+    class Meta:
+        model = AppFeature
+        fields = ['id', 'feature_key', 'key', 'label', 'module']
+
+class AppModuleSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(source='name')
+    items = AppFeatureSerializer(source='features', many=True, read_only=True)
+
+    class Meta:
+        model = AppModule
+        fields = ['id', 'title', 'order', 'items']

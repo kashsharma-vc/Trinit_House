@@ -46,7 +46,10 @@ export default function Invoice() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const invRes = await fetch(`${API_BASE_URL}/finance/invoices/`);
+      const token = localStorage.getItem("token") || localStorage.getItem("authToken");
+      const headers = token ? { "Authorization": `Token ${token}` } : {};
+
+      const invRes = await fetch(`${API_BASE_URL}/finance/invoices/`, { headers });
       const invData = await invRes.json();
       const rawInvoices = Array.isArray(invData) ? invData : (invData.results || []);
 
@@ -62,7 +65,7 @@ export default function Invoice() {
       }));
       setInvoices(formattedInvoices);
 
-      const batchRes = await fetch(`${API_BASE_URL}/operations/requests/`);
+      const batchRes = await fetch(`${API_BASE_URL}/operations/requests/`, { headers });
       const batchData = await batchRes.json();
       const rawBatches = Array.isArray(batchData) ? batchData : (batchData.results || []);
 
@@ -202,7 +205,14 @@ export default function Invoice() {
         </DialogContent>
       </Dialog>
 
-      <InvoiceClosureModal open={closureModalOpen} onClose={() => setClosureModalOpen(false)} invoice={selectedInvoice} onClosureComplete={fetchData} />
+      <InvoiceClosureModal 
+        open={closureModalOpen} 
+        onClose={() => setClosureModalOpen(false)} 
+        invoice={selectedInvoice} 
+        mode="admin"
+        authToken={localStorage.getItem("token") || localStorage.getItem("authToken") || undefined}
+        onClosureComplete={fetchData} 
+      />
     </MainLayout>
   );
 }

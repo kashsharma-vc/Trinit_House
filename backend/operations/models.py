@@ -73,11 +73,15 @@ class ServiceRequest(models.Model):
 class PenaltyCase(models.Model):
     STATUS_CHOICES = [
         ('Open', 'Open'),
+        ('In Review', 'In Review'),
+        ('Resolved', 'Resolved'),
         ('Closed', 'Closed'),
     ]
-    vendor = models.CharField(max_length=100)
-    zone = models.CharField(max_length=50)
-    workshop = models.CharField(max_length=100)
+    id = models.CharField(primary_key=True, max_length=50, editable=False)
+    vendor = models.CharField(max_length=100, blank=True, null=True)
+    zone = models.CharField(max_length=50, blank=True, null=True)
+    workshop = models.CharField(max_length=100, blank=True, null=True)
+    reason = models.TextField(blank=True, null=True)
     delayed = models.IntegerField(default=0, help_text="Number of days delayed")
     penaltyRisk = models.IntegerField(default=0, help_text="Amount at risk in Rupees")
     assignedTo = models.CharField(max_length=100, blank=True, null=True)

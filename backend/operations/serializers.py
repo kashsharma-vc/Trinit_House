@@ -23,6 +23,7 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
     workshop_name = serializers.SerializerMethodField()
     compressor_type = serializers.SerializerMethodField()
     stages = serializers.SerializerMethodField()
+    invoice = serializers.SerializerMethodField()
 
     class Meta:
         model = ServiceRequest
@@ -40,6 +41,12 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
     def get_stages(self, instance):
         ordered_stages = instance.stages.all().order_by('sequence')
         return SOPStageSerializer(ordered_stages, many=True).data
+
+    def get_invoice(self, instance):
+        if hasattr(instance, 'invoice'):
+            from finance.serializers import InvoiceSerializer
+            return InvoiceSerializer(instance.invoice).data
+        return None
 
     def to_internal_value(self, data):
         # Create a mutable copy of the incoming data

@@ -3,7 +3,7 @@ from django.shortcuts import render
 # Create your views here.
 
 from rest_framework import viewsets
-from .models import Role, Zone, Workshop, Category , Compressor
+from .models import Role, Zone, Workshop, Category , Compressor , RoleAccessMapping
 from .serializers import RoleSerializer, ZoneSerializer, WorkshopSerializer, CategorySerializer ,CompressorSerializer
 
 class RoleViewSet(viewsets.ModelViewSet):
@@ -58,6 +58,9 @@ class RoleAccessMappingViewSet(viewsets.ModelViewSet):
     # Custom endpoint to quickly get or create a mapping for a specific site & role
     @action(detail=False, methods=['post'])
     def sync_mapping(self, request):
+        import json
+        from django.db.models import JSONField
+
         role_id = request.data.get('role_id')
         zone_id = request.data.get('zone_id')
         permissions_data = request.data.get('permissions', {})
@@ -69,14 +72,17 @@ class RoleAccessMappingViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            # Look up the actual Role and Zone instances
-            role_instance = Role.objects.get(id=role_id)
-            zone_instance = Zone.objects.get(id=zone_id)
+            # 1. Crash Prevention: If permissions is a TextField instead of a JSONField,
+            # we must convert the dictionary into a JSON string before saving it.
+            permissions_field = RoleAccessMapping._meta.get_field('permissions')
+            if not isinstance(permissions_field, JSONField):
+                permissions_data = json.dumps(permissions_data)
 
-            # Update or create the mapping record
+            # 2. EXACT SCHEMA MATCH: Based on your error log, your database uses 
+            # 'role_id' and 'site_id'. We will map 'zone_id' straight into 'site_id'.
             mapping, created = RoleAccessMapping.objects.update_or_create(
-                role=role_instance,
-                zone=zone_instance,
+                role_id=role_id,
+                site_id=zone_id,
                 defaults={'permissions': permissions_data}
             )
 
@@ -85,12 +91,8 @@ class RoleAccessMappingViewSet(viewsets.ModelViewSet):
                 "created": created
             }, status=status.HTTP_200_OK)
 
-        except Role.DoesNotExist:
-            return Response({"error": "Role not found"}, status=status.HTTP_404_NOT_FOUND)
-        except Zone.DoesNotExist:
-            return Response({"error": "Zone not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            # This prints the exact reason for the 500 error in your Django terminal!
+            # This prints the exact reason for the error in your Django terminal console
             print(f"ERROR IN SYNC MAPPING: {str(e)}") 
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
@@ -145,3 +147,38 @@ class TechnicianListView(APIView):
         # Fetch all non-admin users to populate the assignment dropdown
         techs = User.objects.filter(is_superuser=False).values('id', 'username')
         return Response(techs)
+    
+from rest_framework import viewsets
+from .models import AppModule
+from .serializers import AppModuleSerializer # Create this to include nested features
+
+from .models import AppModule, AppFeature
+from .serializers import AppModuleSerializer, AppFeatureSerializer
+
+class AppFeatureViewSet(viewsets.ModelViewSet):
+    queryset = AppFeature.objects.all()
+    serializer_class = AppFeatureSerializer
+
+class FeatureMasterViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = AppModule.objects.prefetch_related('features').all().order_by('order')
+    serializer_class = AppModuleSerializer
+
+    def list(self, request, *args, **kwargs):
+        # Auto-seed the default data if the database is completely empty
+        if not AppModule.objects.exists():
+            self._seed_defaults()
+        return super().list(request, *args, **kwargs)
+
+    def _seed_defaults(self):
+        defaults = [
+            {"id": "core", "title": "Core Features", "items": [{"key": "my_tickets", "label": "My Tickets"}, {"key": "staff", "label": "Staff Management"}, {"key": "communication", "label": "Communications"}, {"key": "vendors", "label": "Vendor Management"}]},
+            {"id": "operations", "title": "Operations", "items": [{"key": "bookings", "label": "Facility Bookings"}, {"key": "visitor_mgmt", "label": "Visitor Management"}, {"key": "incidents", "label": "Incident Reporting"}, {"key": "work_order", "label": "Work Orders"}, {"key": "gatepass", "label": "Gate Pass"}]},
+            {"id": "financial", "title": "Financial & Accounts", "items": [{"key": "accounting", "label": "Accounting"}, {"key": "bills", "label": "Billing & Invoicing"}]},
+            {"id": "hr", "title": "Human Resources", "items": [{"key": "attendance", "label": "Attendance"}, {"key": "hrms", "label": "HRMS"}]},
+            {"id": "site_setup", "title": "System Setup", "items": [{"key": "setup_tickets", "label": "Ticket Configurations"}, {"key": "setup_incidents", "label": "Incident Configurations"}]}
+        ]
+        
+        for order, mod in enumerate(defaults):
+            module_obj = AppModule.objects.create(name=mod['title'], order=order)
+            for item in mod['items']:
+                AppFeature.objects.create(module=module_obj, feature_key=item['key'], label=item['label'])

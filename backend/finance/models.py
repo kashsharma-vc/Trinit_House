@@ -34,8 +34,12 @@ class Invoice(models.Model):
     
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     final_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, blank=True, null=True)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='Pending Review')
     date_created = models.DateField(auto_now_add=True)
+    
+    # Store dynamic invoice items
+    costing_data = models.JSONField(default=dict, blank=True, null=True)
 
     def save(self, *args, **kwargs):
         if not self.invoice_id:

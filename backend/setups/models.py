@@ -12,6 +12,22 @@ class SetupMaster(models.Model):
     class Meta:
         abstract = True
 
+# Add these to your backend/setups/models.py or where your setup models live
+class AppModule(models.Model):
+    name = models.CharField(max_length=100)  # e.g., "Core", "Operations"
+    order = models.IntegerField(default=0)
+
+    def __str__(self):
+        return self.name
+
+class AppFeature(models.Model):
+    module = models.ForeignKey(AppModule, related_name='features', on_delete=models.CASCADE)
+    feature_key = models.CharField(max_length=100, unique=True)  # e.g., "my_tickets"
+    label = models.CharField(max_length=100)  # e.g., "My Tickets"
+    
+    def __str__(self):
+        return self.label
+
 
 class Role(SetupMaster):
     role_name = models.CharField(max_length=100, unique=True)
@@ -67,6 +83,7 @@ class RoleAccessMapping(SetupMaster):
     role = models.ForeignKey('Role', on_delete=models.CASCADE, related_name='access_mappings')
     site_id = models.CharField(max_length=50) # Stores the ID of the selected site
     permissions = JSONField(default=dict, blank=True) # Stores { "core:my_tickets": { "view": true, "create": false } }
+    #permissions = models.JSONField(default=dict, blank=True, null=True)
 
     def __str__(self):
         return f"{self.role.role_name} - Site: {self.site_id}"

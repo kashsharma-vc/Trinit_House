@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/api";
 import {  
   Users, Shield, Building2, MapPin, Wrench, Package, Clock,  
-  FileText, Database, Tag, AlertTriangle, History
+  FileText, Database, Tag, AlertTriangle, History, Layers
 } from "lucide-react";
 
 // Simplified tabs - only 9 sections as per requirements
@@ -23,6 +23,7 @@ const setupTabs = [
   { id: "sla", label: "SLA Settings", description: "Configure SLA thresholds and penalties", icon: Clock },  
   { id: "inventory", label: "Inventory Masters", description: "Manage spare parts catalog", icon: Package },  
   { id: "audit", label: "Audit & Compliance", description: "Configure audit settings", icon: History },
+  { id: "app_features", label: "Feature Access", description: "Add modules for Role Matrix", icon: Layers },
 ];
 
 export default function Setup() {  
@@ -37,35 +38,43 @@ export default function Setup() {
   const [liveCategories, setLiveCategories] = useState<any[]>([]);  
   const [liveZones, setLiveZones] = useState<any[]>([]);  
   const [liveWorkshops, setLiveWorkshops] = useState<any[]>([]);
+  const [liveModules, setLiveModules] = useState<any[]>([]);
+  const [liveFeatures, setLiveFeatures] = useState<any[]>([]);
 
   // --- 2. REUSABLE FETCH FUNCTION ---
   const fetchData = async () => {    
     try {      
-      const [compRes, catRes, zoneRes, wsRes] = await Promise.all([        
+      const [compRes, catRes, zoneRes, wsRes, modRes, featRes] = await Promise.all([        
         fetch(`${API_BASE_URL}/setups/compressors/`),        
         fetch(`${API_BASE_URL}/setups/categories/`),        
         fetch(`${API_BASE_URL}/setups/zones/`),        
-        fetch(`${API_BASE_URL}/setups/workshops/`)      
+        fetch(`${API_BASE_URL}/setups/workshops/`),
+        fetch(`${API_BASE_URL}/setups/features-master/`),
+        fetch(`${API_BASE_URL}/setups/app-features/`)
       ]);      
-      
+
       const compData = await compRes.json();      
       const catData = await catRes.json();      
       const zoneData = await zoneRes.json();      
       const wsData = await wsRes.json();      
-      
+      const modData = await modRes.json();
+      const featData = await featRes.json();
+
       // Safely extract arrays      
       const rawCompressors = Array.isArray(compData) ? compData : (compData.results || []);      
       const rawCategories = Array.isArray(catData) ? catData : (catData.results || []);      
       const rawZones = Array.isArray(zoneData) ? zoneData : (zoneData.results || []);      
-      const rawWorkshops = Array.isArray(wsData) ? wsData : (wsData.results || []);      
-      
+      const rawWorkshops = Array.isArray(wsData) ? wsData : (wsData.results || []);
+      const rawModules = Array.isArray(modData) ? modData : (modData.results || []);
+      const rawFeatures = Array.isArray(featData) ? featData : (featData.results || []);      
+
       // MAP 1: Categories      
       setLiveCategories(rawCategories.map((c: any) => ({        
         id: c.id,        
         categoryName: c.category_name || c.name,        
         status: c.status || "Active"      
       })));      
-      
+
       // MAP 2: Zones      
       setLiveZones(rawZones.map((z: any) => ({        
         id: z.id,        
@@ -73,7 +82,7 @@ export default function Setup() {
         description: z.description || "",        
         status: z.status || "Active"      
       })));      
-      
+
       // MAP 3: Workshops      
       setLiveWorkshops(rawWorkshops.map((w: any) => ({        
         id: w.id,        
@@ -85,7 +94,7 @@ export default function Setup() {
         defaultSLA: w.default_sla || 0,        
         status: w.status || "Active"      
       })));      
-      
+
       // MAP 4: Compressors      
       setLiveCompressors(rawCompressors.map((c: any) => ({        
         id: c.id,        
@@ -95,7 +104,16 @@ export default function Setup() {
         categoryName: c.cat_name || "Unknown",
         penaltyApplicable: c.penalty_applicable ? "Yes" : "No",        
         status: c.status || "Active"      
-      })));    
+      })));      
+
+      setLiveModules(rawModules);
+      setLiveFeatures(rawFeatures.map((f: any) => ({
+        id: f.id,
+        featureKey: f.feature_key,
+        label: f.label,
+        moduleId: f.module,
+        moduleName: rawModules.find((m: any) => m.id === f.module)?.title || "Unknown Module"
+      })));
     } catch (error) {      
       console.error("Failed to fetch setup data from Django:", error);    
     }  
@@ -125,7 +143,7 @@ export default function Setup() {
 
   // --- 3. DYNAMIC DELETE FUNCTION ---
   const handleDelete = async (collection: string, id: string, name: string) => {    
-    const isLiveEndpoint = ['zones', 'workshops', 'categories', 'compressors'].includes(collection);
+    const isLiveEndpoint = ['zones', 'workshops', 'categories', 'compressors', 'app-features'].includes(collection);
 
     if (isLiveEndpoint) {
       try {
@@ -150,7 +168,7 @@ export default function Setup() {
       return;    
     }    
 
-    const isLiveEndpoint = ['zones', 'workshops', 'categories', 'compressors'].includes(collection);
+    const isLiveEndpoint = ['zones', 'workshops', 'categories', 'compressors', 'app-features'].includes(collection);
     
     // Convert boolean toggles to Active/Inactive strings if needed
     const statusVal = data.status === true || data.status === 'Active' ? 'Active' : 'Inactive';
@@ -171,6 +189,12 @@ export default function Setup() {
         payload = { category_name: data.categoryName, status: statusVal };
       } else if (collection === 'compressors') {
         payload = { compressor_type: data.compressorType, model: data.model, category: data.categoryId, penalty_applicable: data.penaltyApplicable === true || data.penaltyApplicable === 'Yes', status: statusVal };
+      } else if (collection === 'app-features') {
+        payload = { 
+          feature_key: data.featureKey, 
+          label: data.label, 
+          module: data.moduleId 
+        };
       }
 
       try {
@@ -643,7 +667,51 @@ export default function Setup() {
               </div>            
             </div>          
           </div>        
-        );      
+        );
+
+      case 'app_features':
+        return (
+          <>
+            <MasterList
+              title="App Features (Role Access)"
+              data={liveFeatures}
+              columns={[
+                { key: 'label', label: 'Feature Name', sortable: true },
+                { key: 'featureKey', label: 'Internal Key' },
+                { key: 'moduleName', label: 'Assigned Module', sortable: true },
+              ]}
+              onAdd={handleAdd}
+              onEdit={handleEdit}
+              onDelete={(id) => handleDelete('app-features', id, 'Feature')}
+              addButtonText="Add New Feature"
+              searchPlaceholder="Search features..."
+              searchKeys={['label', 'featureKey', 'moduleName']}
+            />
+            <MasterDetailModal
+              open={modalOpen}
+              onClose={() => setModalOpen(false)}
+              title="System Feature"
+              subtitle="Add new capabilities to the Role Access Matrix"
+              icon={<Layers className="w-5 h-5" />}
+              mode={modalMode}
+              idPrefix="FEAT"
+              initialData={selectedItem || {}}
+              onSave={(data) => handleSave('app-features', modalMode === 'edit' ? { ...selectedItem, ...data } : data, modalMode)}
+              fields={[
+                { name: 'label', label: 'Feature Display Name', type: 'text', required: true, placeholder: 'e.g., Generate Reports' },
+                { name: 'featureKey', label: 'Internal Key (No spaces)', type: 'text', required: true, placeholder: 'e.g., generate_reports' },
+                { 
+                  name: 'moduleId', 
+                  label: 'Parent Module', 
+                  type: 'select', 
+                  required: true, 
+                  options: getOptions(liveModules, 'title'), 
+                  showLink: true 
+                },
+              ]}
+            />
+          </>
+        );
       default:        
         return null;    
     }  

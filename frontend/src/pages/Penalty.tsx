@@ -32,7 +32,6 @@ const statusColors: Record<string, string> = {
 interface BreachCase {
   id: string;
   zone: string;
-  location: string;
   workshop: string;
   reason: string;
   delayed: number;
@@ -54,13 +53,18 @@ export default function Penalty() {
   const [formOpen, setFormOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<BreachCase>>({ 
-    zone: "Northern", status: "Open", delayed: 0, penaltyRisk: 0, reason: "", vendor: "", workshop: "", location: "" 
+    zone: "Northern", status: "Open", delayed: 0, penaltyRisk: 0, reason: "", vendor: "", workshop: "" 
   });
 
   // --- 1. FETCH DATA FROM THE CORRECT ENDPOINT ---
   const fetchPenalties = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/operations/penalty/cases/`);
+      const token = localStorage.getItem("token") || localStorage.getItem("authToken");
+      const response = await fetch(`${API_BASE_URL}/operations/penalty/cases/`, {
+        headers: {
+          Authorization: `Token ${token}`
+        }
+      });
       if (!response.ok) throw new Error("Failed to fetch");
       const data = await response.json();
       setPenalties(data);
@@ -140,9 +144,13 @@ export default function Penalty() {
     const payload = { ...formData };
     if (!isEditing) delete payload.id;
 
+    const token = localStorage.getItem("token") || localStorage.getItem("authToken");
     await fetch(url, {
       method: isEditing ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        Authorization: `Token ${token}`
+      },
       body: JSON.stringify(payload)
     });
     setFormOpen(false);
@@ -151,9 +159,13 @@ export default function Penalty() {
 
   const handleAction = async (actionStatus: string) => {
     if (!selectedBreach) return;
+    const token = localStorage.getItem("token") || localStorage.getItem("authToken");
     await fetch(`${API_BASE_URL}/operations/penalty/cases/${selectedBreach.id}/`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        Authorization: `Token ${token}`
+      },
       body: JSON.stringify({ status: actionStatus })
     });
     fetchPenalties();
@@ -191,7 +203,7 @@ export default function Penalty() {
             <Download className="w-4 h-4 mr-2" /> Export Report
           </Button>
           <Button className="gap-2 font-bold uppercase tracking-wide" onClick={() => { 
-            setFormData({zone: "Northern", status: "Open", delayed: 0, penaltyRisk: 0, reason: "", vendor: "", workshop: "", location: ""}); 
+            setFormData({zone: "Northern", status: "Open", delayed: 0, penaltyRisk: 0, reason: "", vendor: "", workshop: ""}); 
             setFormOpen(true); 
           }}>
             <Plus className="w-4 h-4 mr-2" /> Log Breach
@@ -447,7 +459,8 @@ export default function Penalty() {
             <Input placeholder="e.g. Rajesh Kumar" onChange={(e) => setFormData({...formData, assignedTo: e.target.value})} />
             <Button className="w-full bg-slate-900 text-white font-bold" onClick={async () => {
               if(!selectedBreach) return;
-              await fetch(`${API_BASE_URL}/operations/penalty/cases/${selectedBreach.id}/`, { method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ assignedTo: formData.assignedTo }) });
+              const token = localStorage.getItem("token") || localStorage.getItem("authToken");
+              await fetch(`${API_BASE_URL}/operations/penalty/cases/${selectedBreach.id}/`, { method: "PATCH", headers: {"Content-Type": "application/json", Authorization: `Token ${token}`}, body: JSON.stringify({ assignedTo: formData.assignedTo }) });
               setAssignOpen(false);
               fetchPenalties();
             }}>Confirm Assignment</Button>

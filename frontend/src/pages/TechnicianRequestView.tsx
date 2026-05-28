@@ -5,11 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ArrowRight, Search, ChevronLeft, CheckCircle2, Circle, Upload, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { MainLayout } from "@/components/layout/MainLayout";
+import { InvoiceClosureModal } from "@/components/invoice/InvoiceClosureModal";
 
 export default function TechnicianRequests() {
   const navigate = useNavigate();
@@ -23,6 +25,10 @@ export default function TechnicianRequests() {
   const [activeView, setActiveView] = useState<"list" | "workflow">("list");
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
+  
+  // Invoice Generation State
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [invoiceMode, setInvoiceMode] = useState<"technician" | "view">("technician");
 
   const getAuthToken = () => {
     const token = localStorage.getItem("token") || localStorage.getItem("authToken");
@@ -65,16 +71,21 @@ export default function TechnicianRequests() {
   }, [navigate]);
 
   // --- HANDLE CHECKLIST TOGGLE ---
-  const handleChecklistToggle = async (stageId: number, itemId: number, currentCompletedState: boolean) => {
+  const handleChecklistToggle = async (stageId: number, item: any, currentCompletedState: boolean) => {
     const token = getAuthToken();
     if (!token) return;
 
-    setUpdatingItemId(itemId);
+    if (!currentCompletedState && (item.requires_doc || item.requires_photo) && !item.attachment) {
+      toast.error("An attachment is required before marking this complete.");
+      return;
+    }
+
+    setUpdatingItemId(item.id);
 
     try {
       const formData = new FormData();
       formData.append("stage_id", stageId.toString());
-      formData.append("item_id", itemId.toString());
+      formData.append("item_id", item.id.toString());
       formData.append("completed", (!currentCompletedState).toString());
       
       const response = await fetch(`${API_BASE_URL}/operations/requests/${selectedRequest.request_id}/update_checklist/`, {
@@ -344,11 +355,11 @@ export default function TechnicianRequests() {
                         <div key={item.id} className={cn("p-4 flex items-start gap-4", isCompleted ? "bg-slate-50/50" : "bg-white")}>
                           
                           <button 
-                            disabled={isCompleted || isPending || updatingItemId === item.id}
-                            onClick={() => handleChecklistToggle(stage.id, item.id, item.completed)}
+                            disabled={isCompleted || isPending || updatingItemId === item.id || (!item.completed && (item.requires_doc || item.requires_photo) && !item.attachment)}
+                            onClick={() => handleChecklistToggle(stage.id, item, item.completed)}
                             className={cn(
                               "mt-0.5 rounded-full transition-colors focus:outline-none",
-                              (isCompleted || isPending) && "cursor-not-allowed opacity-70"
+                              (isCompleted || isPending || (!item.completed && (item.requires_doc || item.requires_photo) && !item.attachment)) && "cursor-not-allowed opacity-70"
                             )}
                           >
                             {updatingItemId === item.id ? (
@@ -361,14 +372,22 @@ export default function TechnicianRequests() {
                           </button>
                           
                           <div className="flex-1 space-y-2">
-                            {/* 🌟 FIXED: Removed 'line-through' and added a green color for completed tasks */}
                             <p className={cn("text-sm font-medium", item.completed ? "text-emerald-700" : "text-slate-900")}>
                               {item.text}
                             </p>
                             
-                            {/* 🌟 FIXED: Implemented hidden file input for functional uploads */}
                             {(item.requires_doc || item.requires_photo) && (
                               <div className="flex items-center gap-3 pt-2">
+                                {item.attachment && (
+                                  <a 
+                                    href={item.attachment} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-md hover:bg-indigo-100 transition-colors"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3" /> View Upload
+                                  </a>
+                                )}
                                 <div className="relative">
                                   <input
                                     type="file"
@@ -395,10 +414,11 @@ export default function TechnicianRequests() {
                                       ) : (
                                         <Upload className="w-3 h-3" />
                                       )}
-                                      {item.requires_photo ? "Upload Photo Evidence" : "Upload Document"}
+                                      {item.attachment ? "Replace File" : item.requires_photo ? "Upload Photo Evidence" : "Upload Document"}
                                     </div>
                                   </label>
                                 </div>
+                                {!item.completed && !item.attachment && <span className="text-xs text-red-500 font-medium">* Required</span>}
                               </div>
                             )}
                           </div>
@@ -409,9 +429,55 @@ export default function TechnicianRequests() {
                 );
               })}
             </div>
+            
+            {/* INVOICE GENERATION BUTTON FOR CLOSED WORKFLOWS */}
+            {selectedRequest.status === "Closed" && (
+              <div className="mt-8 pt-8 border-t border-slate-200">
+                <Card className="bg-gradient-to-r from-indigo-50 to-blue-50 border-indigo-100 shadow-sm">
+                  <CardContent className="p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-indigo-900">
+                        {selectedRequest.invoice ? "Invoice Generated" : "Workflow Completed"}
+                      </h3>
+                      <p className="text-indigo-700 text-sm mt-1">
+                        {selectedRequest.invoice 
+                          ? "The invoice for this request has been generated and sent to finance."
+                          : "All SOP stages are completed. You can now generate the final invoice."}
+                      </p>
+                    </div>
+                    <Button 
+                      size="lg" 
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold whitespace-nowrap"
+                      onClick={() => {
+                        setInvoiceMode(selectedRequest.invoice ? "view" : "technician");
+                        setInvoiceModalOpen(true);
+                      }}
+                    >
+                      {selectedRequest.invoice ? "View Invoice Details" : "Draft Final Invoice"}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+            
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* INVOICE MODAL */}
+      {selectedRequest && invoiceModalOpen && (
+        <InvoiceClosureModal
+          open={invoiceModalOpen}
+          onClose={() => setInvoiceModalOpen(false)}
+          mode={invoiceMode}
+          authToken={getAuthToken() || undefined}
+          invoice={selectedRequest.invoice || { job_code: selectedRequest.id }}
+          onClosureComplete={() => {
+            fetchRequests();
+            setInvoiceModalOpen(false);
+          }}
+        />
+      )}
     </MainLayout>
   );
 }

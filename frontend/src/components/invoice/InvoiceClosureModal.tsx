@@ -21,9 +21,7 @@ import {
   PenTool,
   Calendar,
   MapPin,
-  Download,
   FileSpreadsheet,
-  FileText,
   Printer,
   Undo,
   Package,
@@ -35,20 +33,28 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-interface BatchCostingRecord {
-  id: string;
-  displayId: string;
-  batchId: string;
-  facility: string;
-  totalAmount: string;
-  status: string;
+export interface InvoiceRecord {
+  id?: string;
+  invoice_id?: string;
+  job_code: string | number; // ServiceRequest ID
+  facility?: string;
+  total_amount?: string | number;
+  final_amount?: string | number;
+  amount_paid?: string | number;
+  status?: string;
+  costing_data?: any;
+  signature_data?: string;
+  signature_timestamp?: string;
+  gps_location?: string;
 }
 
-interface BatchClosureModalProps {
+interface InvoiceClosureModalProps {
   open: boolean;
   onClose: () => void;
-  invoice: BatchCostingRecord | null;
+  invoice: InvoiceRecord | null;
+  mode: "technician" | "admin" | "view";
   onClosureComplete?: () => void;
+  authToken?: string;
 }
 
 const sectionIcons = {
@@ -58,47 +64,56 @@ const sectionIcons = {
   crew: Users,
 };
 
-export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete }: BatchClosureModalProps) {
+const DEFAULT_COSTING_DATA = {
+  rawMaterials: [],
+  packaging: [],
+  logistics: [],
+  crew: [],
+};
+
+export function InvoiceClosureModal({ open, onClose, invoice, mode, onClosureComplete, authToken }: InvoiceClosureModalProps) {
   const [currentStage, setCurrentStage] = useState(1);
-  const [openSections, setOpenSections] = useState<string[]>(["rawMaterials"]);
+  const [openSections, setOpenSections] = useState<string[]>(["rawMaterials", "packaging", "logistics", "crew"]);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [timestamp, setTimestamp] = useState<string | null>(null);
   const [gpsLocation, setGpsLocation] = useState<string | null>(null);
+  const [amountPaid, setAmountPaid] = useState<string>("");
   const [showFinalizeModal, setShowFinalizeModal] = useState(false);
   const [closureComplete, setClosureComplete] = useState(false);
-  const [reopenNotes, setReopenNotes] = useState("");
-  const [showReopenDialog, setShowReopenDialog] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
 
-  const [costingData, setCostingData] = useState({
-    rawMaterials: [
-      { id: "1", item: "Whey Protein Isolate 90%", source: "Vendor - DairyCo", qty: 500, unitPrice: 850, total: 425000 },
-    ],
-    packaging: [
-      { id: "2", item: "2kg Matte Finish Tubs", source: "Stock", qty: 250, unitPrice: 45, total: 11250 },
-    ],
-    logistics: [
-      { id: "3", description: "Freight - Plant to Hub", cost: 15000 },
-    ],
-    crew: [
-      { id: "4", technician: "Rajesh Kumar", grade: "Lead Mixer", hours: 16, rate: 500, total: 8000 },
-    ],
-  });
+  const [costingData, setCostingData] = useState<any>(DEFAULT_COSTING_DATA);
 
-  // FIX 1: Split useEffects to stop the infinite reset loop
   useEffect(() => {
     if (open && invoice) {
-      if (invoice.status === "Closed") {
+      if (invoice.costing_data && Object.keys(invoice.costing_data).length > 0) {
+        setCostingData(invoice.costing_data);
+      } else {
+        setCostingData({
+          rawMaterials: [{ id: "1", item: "Sample Material", source: "Vendor", qty: 1, unitPrice: 500, total: 500 }],
+          packaging: [],
+          logistics: [],
+          crew: [{ id: "4", technician: "Tech", grade: "Lead", hours: 2, rate: 500, total: 1000 }],
+        });
+      }
+      
+      setSignatureData(invoice.signature_data || null);
+      setTimestamp(invoice.signature_timestamp || null);
+      setGpsLocation(invoice.gps_location || null);
+      setAmountPaid(invoice.amount_paid ? String(invoice.amount_paid) : "");
+
+      if (mode === "view" || invoice.status === "Closed") {
         setClosureComplete(true);
         setCurrentStage(3);
       } else {
         setClosureComplete(false);
         setCurrentStage(1);
-        setSignatureData(null);
       }
     }
-  }, [open, invoice]);
+  }, [open, invoice, mode]);
 
   useEffect(() => {
     if (open && canvasRef.current && currentStage === 2) {
@@ -112,8 +127,8 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
 
   if (!invoice) return null;
 
-  const wasteDeduction = 2500; 
-  const subtotal = Object.values(costingData).flat().reduce((acc, item) => {
+  const wasteDeduction = 0; 
+  const subtotal = Object.values(costingData).flat().reduce((acc: number, item: any) => {
     if ('total' in item) return acc + Number(item.total);
     if ('cost' in item) return acc + Number(item.cost);
     return acc;
@@ -121,7 +136,7 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
   const finalAmount = subtotal - wasteDeduction;
 
   const updateItem = (category: keyof typeof costingData, id: string, field: string, value: string | number) => {
-    setCostingData(prev => {
+    setCostingData((prev: any) => {
       const newData = { ...prev };
       const list = [...newData[category]] as any[];
       const index = list.findIndex(i => i.id === id);
@@ -141,7 +156,7 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
 
   const addItem = (category: keyof typeof costingData) => {
     const newId = Date.now().toString();
-    setCostingData(prev => {
+    setCostingData((prev: any) => {
       const newData = { ...prev };
       if (category === 'rawMaterials' || category === 'packaging') {
         newData[category] = [...newData[category], { id: newId, item: "", source: "", qty: 0, unitPrice: 0, total: 0 }];
@@ -155,20 +170,19 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
   };
 
   const removeItem = (category: keyof typeof costingData, id: string) => {
-    setCostingData(prev => ({
+    setCostingData((prev: any) => ({
       ...prev,
       [category]: prev[category].filter((item: any) => item.id !== id)
     }));
   };
 
-  // --- EXPORT & PRINT FUNCTIONS ---
   const handleExportExcel = () => {
     let csv = "Category,Item/Description/Technician,Source/Role,Qty/Hours,Unit Price/Rate,Total\n";
     
-    costingData.rawMaterials.forEach(i => csv += `Raw Material,${i.item},${i.source},${i.qty},${i.unitPrice},${i.total}\n`);
-    costingData.packaging.forEach(i => csv += `Packaging,${i.item},${i.source},${i.qty},${i.unitPrice},${i.total}\n`);
-    costingData.logistics.forEach(i => csv += `Logistics,${i.description},,,${i.cost}\n`);
-    costingData.crew.forEach(i => csv += `Crew,${i.technician},${i.grade},${i.hours},${i.rate},${i.total}\n`);
+    costingData.rawMaterials.forEach((i: any) => csv += `Raw Material,${i.item},${i.source},${i.qty},${i.unitPrice},${i.total}\n`);
+    costingData.packaging.forEach((i: any) => csv += `Packaging,${i.item},${i.source},${i.qty},${i.unitPrice},${i.total}\n`);
+    costingData.logistics.forEach((i: any) => csv += `Logistics,${i.description},,,${i.cost}\n`);
+    costingData.crew.forEach((i: any) => csv += `Crew,${i.technician},${i.grade},${i.hours},${i.rate},${i.total}\n`);
     
     csv += `\nSubtotal,,,,,${subtotal}\n`;
     csv += `Waste Deduction,,,,,-${wasteDeduction}\n`;
@@ -178,7 +192,7 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Batch_Costing_${invoice.displayId}.csv`;
+    a.download = `Invoice_${invoice.invoice_id || 'Draft'}.csv`;
     a.click();
   };
 
@@ -186,7 +200,6 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
     window.print();
   };
 
-  // --- SIGNATURE HANDLERS ---
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -219,21 +232,51 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
     if (!canvas) return;
     setSignatureData(canvas.toDataURL());
     setTimestamp(new Date().toLocaleString());
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        () => setGpsLocation("Manufacturing Facility (28.5485° N, 77.2505° E)"),
-        () => setGpsLocation("Manufacturing Facility")
-      );
-    } else {
-      setGpsLocation("Manufacturing Facility");
+    setGpsLocation("Corporate Office");
+  };
+
+  const handleTechSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        job_code: invoice.job_code,
+        facility: "Main Plant",
+        total_amount: subtotal,
+        final_amount: finalAmount,
+        status: "Pending Review",
+        costing_data: costingData
+      };
+
+      const response = await fetch(`${API_BASE_URL}/finance/invoices/`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Token ${authToken}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      
+      setClosureComplete(true);
+      setCurrentStage(3);
+      onClosureComplete?.(); 
+    } catch (error) {
+      console.error("Failed to generate invoice:", error);
+      alert("Failed to generate invoice. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleFinalizeClosure = async () => {
+  const handleAdminFinalize = async () => {
+    setIsSubmitting(true);
     try {
       const payload = {
-        final_amount: finalAmount,
         status: "Closed",
+        amount_paid: Number(amountPaid),
         signature_data: signatureData, 
         signature_timestamp: timestamp,
         gps_location: gpsLocation,
@@ -241,92 +284,84 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
 
       const response = await fetch(`${API_BASE_URL}/finance/invoices/${invoice.id}/`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Token ${authToken}`
+        },
         body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        console.error("Backend rejection:", await response.text());
-        alert("Failed to close invoice in the database.");
-      } else {
-        setClosureComplete(true);
-        onClosureComplete?.(); 
+        throw new Error(await response.text());
       }
+      
+      setClosureComplete(true);
+      setCurrentStage(3);
+      onClosureComplete?.(); 
+      setShowFinalizeModal(false);
     } catch (error) {
       console.error("Network Error during closure:", error);
+      alert("Failed to close invoice.");
+    } finally {
+      setIsSubmitting(false);
     }
-  };
-
-  const handleReopen = () => {
-    setCurrentStage(1);
-    setSignatureData(null);
-    setTimestamp(null);
-    setGpsLocation(null);
-    setShowReopenDialog(false);
-    setShowFinalizeModal(false);
-    setReopenNotes("");
   };
 
   const toggleSection = (section: string) => {
     setOpenSections(prev => prev.includes(section) ? prev.filter(s => s !== section) : [...prev, section]);
   };
 
-  const stages = [
-    { id: 1, name: "Review Costing", description: "Verify & Edit Details" },
-    { id: 2, name: "QA Sign-off", description: "Digital authorization" },
-    { id: 3, name: "Batch Closed", description: "Costing audit complete" },
-  ];
+  const isEditable = mode === "technician" && !closureComplete;
+  const stages = mode === "technician" 
+    ? [{ id: 1, name: "Draft Invoice", description: "Edit Details" }, { id: 3, name: "Generated", description: "Sent to Admin" }]
+    : [
+        { id: 1, name: "Review Invoice", description: "Verify Details" },
+        { id: 2, name: "Sign-off", description: "Digital authorization & Payment" },
+        { id: 3, name: "Closed", description: "Invoice processed" },
+      ];
 
   const renderLineItems = (category: keyof typeof costingData) => {
     const items = costingData[category];
-    const Icon = sectionIcons[category];
-    const isEditable = currentStage === 1 && !closureComplete; 
+    const Icon = sectionIcons[category as keyof typeof sectionIcons];
 
     return (
-      <Collapsible
-        open={openSections.includes(category)}
-        onOpenChange={() => toggleSection(category)}
-        className="border border-border rounded-lg overflow-hidden"
-      >
-        <CollapsibleTrigger className="w-full p-4 flex items-center justify-between bg-muted/30 hover:bg-muted/50 transition-colors">
+      <Collapsible open={openSections.includes(category)} onOpenChange={() => toggleSection(category)} className="border border-border rounded-lg overflow-hidden">
+        <CollapsibleTrigger className="w-full p-3 flex items-center justify-between bg-muted/30 hover:bg-muted/50 transition-colors">
           <div className="flex items-center gap-3">
-            <Icon className="w-5 h-5 text-primary" />
-            <span className="font-medium capitalize">{category.replace(/([A-Z])/g, ' $1').trim()}</span>
-            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-              {items.length} items
-            </span>
+            <Icon className="w-4 h-4 text-primary" />
+            <span className="font-medium capitalize text-sm">{category.replace(/([A-Z])/g, ' $1').trim()}</span>
+            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{items.length}</span>
           </div>
-          <ChevronDown className={cn("w-5 h-5 text-muted-foreground transition-transform", openSections.includes(category) && "rotate-180")} />
+          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", openSections.includes(category) && "rotate-180")} />
         </CollapsibleTrigger>
-        
         <CollapsibleContent>
-          <div className="p-4 pt-0 overflow-x-auto">
-            <table className="w-full text-sm mt-3">
+          <div className="p-3 pt-0 overflow-x-auto">
+            <table className="w-full text-xs mt-2">
               <thead>
                 <tr className="border-b border-border">
                   {category === "logistics" ? (
                     <>
-                      <th className="text-left py-2 font-medium text-muted-foreground w-2/3">Description</th>
-                      <th className="text-right py-2 font-medium text-muted-foreground">Cost</th>
+                      <th className="text-left py-2 text-muted-foreground w-2/3">Description</th>
+                      <th className="text-right py-2 text-muted-foreground">Cost</th>
                     </>
                   ) : category === "crew" ? (
                     <>
-                      <th className="text-left py-2 font-medium text-muted-foreground">Crew Member</th>
-                      <th className="text-left py-2 font-medium text-muted-foreground">Role</th>
-                      <th className="text-right py-2 font-medium text-muted-foreground w-20">Hours</th>
-                      <th className="text-right py-2 font-medium text-muted-foreground w-24">Rate (₹)</th>
-                      <th className="text-right py-2 font-medium text-muted-foreground">Total</th>
+                      <th className="text-left py-2 text-muted-foreground">Crew Member</th>
+                      <th className="text-left py-2 text-muted-foreground">Role</th>
+                      <th className="text-right py-2 text-muted-foreground w-16">Hours</th>
+                      <th className="text-right py-2 text-muted-foreground w-20">Rate (₹)</th>
+                      <th className="text-right py-2 text-muted-foreground">Total</th>
                     </>
                   ) : (
                     <>
-                      <th className="text-left py-2 font-medium text-muted-foreground">Item</th>
-                      <th className="text-left py-2 font-medium text-muted-foreground">Source</th>
-                      <th className="text-right py-2 font-medium text-muted-foreground w-20">Qty</th>
-                      <th className="text-right py-2 font-medium text-muted-foreground w-24">Unit Price (₹)</th>
-                      <th className="text-right py-2 font-medium text-muted-foreground">Total</th>
+                      <th className="text-left py-2 text-muted-foreground">Item</th>
+                      <th className="text-left py-2 text-muted-foreground">Source</th>
+                      <th className="text-right py-2 text-muted-foreground w-16">Qty</th>
+                      <th className="text-right py-2 text-muted-foreground w-20">Price (₹)</th>
+                      <th className="text-right py-2 text-muted-foreground">Total</th>
                     </>
                   )}
-                  {isEditable && <th className="w-10 print:hidden"></th>}
+                  {isEditable && <th className="w-8 print:hidden"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -334,34 +369,30 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
                   <tr key={item.id} className="border-b border-border/50">
                     {category === "logistics" ? (
                       <>
-                        <td className="py-2 pr-2">
-                          {isEditable ? <Input value={item.description} onChange={e => updateItem(category, item.id, 'description', e.target.value)} className="h-8" /> : item.description}
-                        </td>
-                        <td className="py-2 text-right">
-                          {isEditable ? <Input type="number" value={item.cost || ''} onChange={e => updateItem(category, item.id, 'cost', e.target.value)} className="h-8 text-right" /> : `₹${item.cost}`}
-                        </td>
+                        <td className="py-2 pr-2">{isEditable ? <Input value={item.description} onChange={e => updateItem(category, item.id, 'description', e.target.value)} className="h-7 text-xs" /> : item.description}</td>
+                        <td className="py-2 text-right">{isEditable ? <Input type="number" value={item.cost || ''} onChange={e => updateItem(category, item.id, 'cost', e.target.value)} className="h-7 text-xs text-right" /> : `₹${item.cost}`}</td>
                       </>
                     ) : category === "crew" ? (
                       <>
-                        <td className="py-2 pr-2">{isEditable ? <Input value={item.technician} onChange={e => updateItem(category, item.id, 'technician', e.target.value)} className="h-8" /> : item.technician}</td>
-                        <td className="py-2 pr-2">{isEditable ? <Input value={item.grade} onChange={e => updateItem(category, item.id, 'grade', e.target.value)} className="h-8" /> : item.grade}</td>
-                        <td className="py-2 pr-2">{isEditable ? <Input type="number" value={item.hours || ''} onChange={e => updateItem(category, item.id, 'hours', e.target.value)} className="h-8 text-right" /> : item.hours}</td>
-                        <td className="py-2 pr-2">{isEditable ? <Input type="number" value={item.rate || ''} onChange={e => updateItem(category, item.id, 'rate', e.target.value)} className="h-8 text-right" /> : `₹${item.rate}`}</td>
+                        <td className="py-2 pr-2">{isEditable ? <Input value={item.technician} onChange={e => updateItem(category, item.id, 'technician', e.target.value)} className="h-7 text-xs" /> : item.technician}</td>
+                        <td className="py-2 pr-2">{isEditable ? <Input value={item.grade} onChange={e => updateItem(category, item.id, 'grade', e.target.value)} className="h-7 text-xs" /> : item.grade}</td>
+                        <td className="py-2 pr-2">{isEditable ? <Input type="number" value={item.hours || ''} onChange={e => updateItem(category, item.id, 'hours', e.target.value)} className="h-7 text-xs text-right" /> : item.hours}</td>
+                        <td className="py-2 pr-2">{isEditable ? <Input type="number" value={item.rate || ''} onChange={e => updateItem(category, item.id, 'rate', e.target.value)} className="h-7 text-xs text-right" /> : `₹${item.rate}`}</td>
                         <td className="py-2 text-right font-medium">₹{item.total.toLocaleString()}</td>
                       </>
                     ) : (
                       <>
-                        <td className="py-2 pr-2">{isEditable ? <Input value={item.item} onChange={e => updateItem(category, item.id, 'item', e.target.value)} className="h-8" /> : item.item}</td>
-                        <td className="py-2 pr-2">{isEditable ? <Input value={item.source} onChange={e => updateItem(category, item.id, 'source', e.target.value)} className="h-8" /> : item.source}</td>
-                        <td className="py-2 pr-2">{isEditable ? <Input type="number" value={item.qty || ''} onChange={e => updateItem(category, item.id, 'qty', e.target.value)} className="h-8 text-right" /> : item.qty}</td>
-                        <td className="py-2 pr-2">{isEditable ? <Input type="number" value={item.unitPrice || ''} onChange={e => updateItem(category, item.id, 'unitPrice', e.target.value)} className="h-8 text-right" /> : `₹${item.unitPrice}`}</td>
+                        <td className="py-2 pr-2">{isEditable ? <Input value={item.item} onChange={e => updateItem(category, item.id, 'item', e.target.value)} className="h-7 text-xs" /> : item.item}</td>
+                        <td className="py-2 pr-2">{isEditable ? <Input value={item.source} onChange={e => updateItem(category, item.id, 'source', e.target.value)} className="h-7 text-xs" /> : item.source}</td>
+                        <td className="py-2 pr-2">{isEditable ? <Input type="number" value={item.qty || ''} onChange={e => updateItem(category, item.id, 'qty', e.target.value)} className="h-7 text-xs text-right" /> : item.qty}</td>
+                        <td className="py-2 pr-2">{isEditable ? <Input type="number" value={item.unitPrice || ''} onChange={e => updateItem(category, item.id, 'unitPrice', e.target.value)} className="h-7 text-xs text-right" /> : `₹${item.unitPrice}`}</td>
                         <td className="py-2 text-right font-medium">₹{item.total.toLocaleString()}</td>
                       </>
                     )}
                     {isEditable && (
                       <td className="py-2 pl-2 text-right print:hidden">
-                        <Button variant="ghost" size="icon" onClick={() => removeItem(category, item.id)} className="h-8 w-8 text-danger hover:text-danger hover:bg-danger/10">
-                          <Trash2 className="w-4 h-4" />
+                        <Button variant="ghost" size="icon" onClick={() => removeItem(category, item.id)} className="h-7 w-7 text-danger">
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </td>
                     )}
@@ -369,10 +400,9 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
                 ))}
               </tbody>
             </table>
-            
             {isEditable && (
-              <Button variant="outline" size="sm" onClick={() => addItem(category)} className="mt-3 gap-2 w-full border-dashed print:hidden">
-                <PlusCircle className="w-4 h-4" /> Add Row
+              <Button variant="outline" size="sm" onClick={() => addItem(category)} className="mt-2 text-xs h-7 w-full border-dashed print:hidden">
+                <PlusCircle className="w-3 h-3 mr-2" /> Add Row
               </Button>
             )}
           </div>
@@ -384,267 +414,173 @@ export function InvoiceClosureModal({ open, onClose, invoice, onClosureComplete 
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="print:hidden">
-            <DialogTitle>Batch Costing & Closure Workflow</DialogTitle>
+            <DialogTitle>Invoice Details</DialogTitle>
           </DialogHeader>
 
-          {/* Header Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-muted/30 rounded-xl p-4 border border-border"
-          >
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-muted/30 rounded-xl p-4 border border-border">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-1">
-                <h3 className="text-lg font-bold text-primary">{invoice.displayId}</h3>
-                <p className="text-sm text-muted-foreground">
-                  Batch: {invoice.batchId} • {invoice.facility}
-                </p>
+                <h3 className="text-lg font-bold text-primary">{invoice.invoice_id || 'Draft Invoice'}</h3>
+                <p className="text-sm text-muted-foreground">Job Code: {invoice.job_code}</p>
               </div>
-              <div className={cn(
-                "px-3 py-1.5 rounded-full text-sm font-medium print:hidden",
-                currentStage === 3 && closureComplete ? "bg-success text-success-foreground" :
-                currentStage === 2 && signatureData ? "bg-info text-info-foreground" :
-                "bg-warning text-warning-foreground"
-              )}>
-                {currentStage === 3 && closureComplete ? "Closed" :
-                 currentStage === 2 && signatureData ? "Pending QA Sign-off" :
-                 "Pending Costing Review"}
+              <div className={cn("px-3 py-1 rounded-full text-xs font-medium print:hidden", closureComplete ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground")}>
+                {closureComplete ? "Closed" : mode === "technician" ? "Drafting" : "Pending Review"}
               </div>
             </div>
           </motion.div>
 
-          {/* Workflow Steps */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="flex items-center justify-between py-4 print:hidden"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-between py-4 print:hidden">
             {stages.map((stage, index) => (
               <div key={stage.id} className="flex items-center flex-1">
                 <div className="flex flex-col items-center">
-                  <motion.div
-                    whileHover={{ scale: 1.1 }}
-                    className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors",
-                      currentStage > stage.id ? "bg-success text-success-foreground" :
-                      currentStage === stage.id ? "bg-primary text-primary-foreground" :
-                      "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {currentStage > stage.id ? <CheckCircle className="w-5 h-5" /> : stage.id}
-                  </motion.div>
-                  <p className="mt-2 font-medium text-xs">{stage.name}</p>
+                  <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold", currentStage > stage.id ? "bg-success text-white" : currentStage === stage.id ? "bg-primary text-white" : "bg-muted text-muted-foreground")}>
+                    {currentStage > stage.id ? <CheckCircle className="w-4 h-4" /> : stage.id}
+                  </div>
+                  <p className="mt-1 font-medium text-[10px]">{stage.name}</p>
                 </div>
-                {index < stages.length - 1 && (
-                  <div className={cn("flex-1 h-0.5 mx-4", currentStage > stage.id ? "bg-success" : "bg-muted")} />
-                )}
+                {index < stages.length - 1 && <div className={cn("flex-1 h-0.5 mx-2", currentStage > stage.id ? "bg-success" : "bg-muted")} />}
               </div>
             ))}
           </motion.div>
 
-          {/* Stage Content */}
           <AnimatePresence mode="wait">
             {currentStage === 1 && !closureComplete && (
-              <motion.div key="stage1" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-4">
-                <h4 className="font-semibold text-lg print:hidden">Edit Batch Costing Details</h4>
-                <p className="text-sm text-muted-foreground mb-4 print:hidden">Input all used materials, labor, and freight costs to generate the final bill.</p>
-                
-                <div className="space-y-3">
+              <motion.div key="stage1" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-3">
+                <div className="space-y-2">
                   {renderLineItems("rawMaterials")}
                   {renderLineItems("packaging")}
                   {renderLineItems("logistics")}
                   {renderLineItems("crew")}
                 </div>
 
-                <div className="border-t border-border pt-4 space-y-2 bg-muted/20 p-4 rounded-xl mt-4">
+                <div className="border-t border-border pt-3 space-y-1 bg-muted/20 p-4 rounded-xl mt-4">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Production Subtotal</span>
+                    <span className="text-muted-foreground">Subtotal</span>
                     <span>₹{subtotal.toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">QA Rejection / Waste Deduction</span>
-                    <span className="text-danger">-₹{wasteDeduction.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-xl font-bold pt-3 border-t border-border mt-2">
+                  <div className="flex justify-between text-lg font-bold pt-2 border-t border-border mt-2">
                     <span>Final Calculated Cost</span>
                     <span className="text-primary">₹{finalAmount.toLocaleString()}</span>
                   </div>
                 </div>
 
-                {/* FIX 2: Added Export/Print buttons to Stage 1 */}
                 <div className="flex items-center gap-3 pt-4 print:hidden">
-                  <Button variant="outline" className="gap-2" onClick={handlePrint}>
-                    <Printer className="w-4 h-4" /> Print / Save PDF
-                  </Button>
-                  <Button variant="outline" className="gap-2" onClick={handleExportExcel}>
-                    <FileSpreadsheet className="w-4 h-4" /> Export CSV
-                  </Button>
-                  
+                  <Button variant="outline" size="sm" onClick={handlePrint}><Printer className="w-3 h-3 mr-2" /> Print</Button>
+                  <Button variant="outline" size="sm" onClick={handleExportExcel}><FileSpreadsheet className="w-3 h-3 mr-2" /> Export</Button>
                   <div className="flex-1" />
-                  
-                  <Button onClick={() => setCurrentStage(2)} className="gap-2">
-                    Save Details & Proceed to Sign-off
-                    <CheckCircle className="w-4 h-4" />
-                  </Button>
+                  {mode === "technician" ? (
+                    <Button onClick={handleTechSubmit} disabled={isSubmitting}>
+                      {isSubmitting ? "Generating..." : "Generate & Send to Admin"}
+                    </Button>
+                  ) : mode === "admin" ? (
+                    <Button onClick={() => setCurrentStage(2)}>Proceed to Sign-off <CheckCircle className="w-4 h-4 ml-2" /></Button>
+                  ) : null}
                 </div>
               </motion.div>
             )}
 
-            {currentStage === 2 && !closureComplete && (
-              <motion.div key="stage2" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-6">
-                <h4 className="font-semibold">QA Manager Digital Sign-off</h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2 p-4 bg-muted/30 rounded-xl border border-border">
-                    <div className="flex items-center gap-2 text-muted-foreground mb-3">
-                      <PenTool className="w-4 h-4" />
-                      <span className="text-sm font-medium">Signature Capture</span>
-                    </div>
-                    
+            {currentStage === 2 && !closureComplete && mode === "admin" && (
+              <motion.div key="stage2" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 bg-muted/30 rounded-xl border border-border">
+                    <div className="flex items-center gap-2 text-muted-foreground mb-3"><PenTool className="w-4 h-4" /><span className="text-sm font-medium">Signature</span></div>
                     {!signatureData ? (
-                      <div className="space-y-3">
-                        <canvas
-                          ref={canvasRef}
-                          width={400}
-                          height={150}
-                          onMouseDown={startDrawing}
-                          onMouseMove={draw}
-                          onMouseUp={stopDrawing}
-                          onMouseLeave={stopDrawing}
-                          className="w-full border-2 border-dashed border-border rounded-lg cursor-crosshair bg-muted"
-                        />
-                        <p className="text-xs text-muted-foreground text-center">Click and drag to sign</p>
-                        <Button onClick={captureSignature} className="w-full">Capture Signature</Button>
+                      <div className="space-y-2">
+                        <canvas ref={canvasRef} width={350} height={120} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} className="w-full border-2 border-dashed rounded-lg bg-muted cursor-crosshair" />
+                        <Button size="sm" onClick={captureSignature} className="w-full">Capture Signature</Button>
                       </div>
                     ) : (
-                      <div className="space-y-3">
-                        <div className="h-[150px] border-2 border-success rounded-lg bg-success/5 flex items-center justify-center">
-                          <div className="text-center">
-                            <CheckCircle className="w-12 h-12 text-success mx-auto mb-2" />
-                            <p className="font-medium text-success">Signature Captured</p>
-                          </div>
+                      <div className="space-y-2">
+                        <div className="h-[120px] border-2 border-success rounded-lg bg-success/5 flex items-center justify-center">
+                          <CheckCircle className="w-8 h-8 text-success" />
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => setSignatureData(null)} className="gap-2">
-                          <Undo className="w-4 h-4" /> Re-sign
-                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setSignatureData(null)} className="w-full"><Undo className="w-3 h-3 mr-2" /> Re-sign</Button>
                       </div>
                     )}
                   </div>
-
                   <div className="space-y-4">
                     <div className="p-4 bg-muted/30 rounded-xl border border-border">
                       <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                        <Calendar className="w-4 h-4" />
-                        <span className="text-sm font-medium">Timestamp</span>
+                        <span className="text-sm font-medium">Payment Details</span>
                       </div>
-                      <p className={cn("font-medium text-sm", timestamp ? "" : "text-muted-foreground")}>{timestamp || "Will be captured on sign"}</p>
-                    </div>
-                    <div className="p-4 bg-muted/30 rounded-xl border border-border">
-                      <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                        <MapPin className="w-4 h-4" />
-                        <span className="text-sm font-medium">GPS Location</span>
-                      </div>
-                      <p className={cn("font-medium text-sm", gpsLocation ? "" : "text-muted-foreground")}>{gpsLocation || "Will be auto-captured"}</p>
+                      <p className="text-xs mb-2">Total Billed: <strong className="text-lg">₹{finalAmount.toLocaleString()}</strong></p>
+                      <label className="text-xs text-muted-foreground mb-1 block">Amount Paid by Admin (₹)</label>
+                      <Input type="number" placeholder="Enter amount..." value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} />
                     </div>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setCurrentStage(1)}>Back to Costing</Button>
+                <div className="flex items-center gap-3 pt-2">
+                  <Button variant="outline" onClick={() => setCurrentStage(1)}>Back</Button>
                   <div className="flex-1" />
-                  <Button onClick={() => setShowFinalizeModal(true)} className="gap-2" disabled={!signatureData}>
-                    Proceed to Finalize <CheckCircle className="w-4 h-4" />
-                  </Button>
+                  <Button onClick={() => setShowFinalizeModal(true)} disabled={!signatureData || !amountPaid}>Finalize Invoice</Button>
                 </div>
               </motion.div>
             )}
 
             {currentStage === 3 && closureComplete && (
-              <motion.div key="stage3" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-6">
-                  <div className="py-12 text-center">
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                      className="w-20 h-20 rounded-full bg-success mx-auto flex items-center justify-center mb-4"
-                    >
-                      <CheckCircle className="w-10 h-10 text-success-foreground" />
-                    </motion.div>
-                    <h3 className="text-2xl font-bold text-success mb-2">Batch Officially Closed</h3>
-                    <p className="text-muted-foreground mb-6">Costing calculations and QA signatures permanently recorded.</p>
-                    
-                    <div className="flex items-center justify-center gap-3">
-                      <Button variant="outline" className="gap-2" onClick={handlePrint}>
-                        <Printer className="w-4 h-4" /> Print / Save PDF
-                      </Button>
-                      <Button variant="outline" className="gap-2" onClick={handleExportExcel}>
-                        <FileSpreadsheet className="w-4 h-4" /> Download Excel CSV
-                      </Button>
-                    </div>
+              <motion.div key="stage3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                <div className="py-6 text-center print:hidden">
+                  <CheckCircle className="w-12 h-12 text-success mx-auto mb-2" />
+                  <h3 className="text-xl font-bold text-success mb-2">Invoice Generated & Closed</h3>
+                  <div className="flex items-center justify-center gap-3 mt-4">
+                    <Button variant="outline" size="sm" onClick={handlePrint}><Printer className="w-4 h-4 mr-2" /> Print PDF</Button>
                   </div>
+                </div>
+
+                <div className="space-y-2 hidden print:block">
+                  <h2 className="text-2xl font-bold border-b pb-2 mb-4">TRINITY HOUSE - INVOICE</h2>
+                  <p><strong>Invoice ID:</strong> {invoice.invoice_id}</p>
+                  <p><strong>Job Code:</strong> {invoice.job_code}</p>
+                  <p><strong>Total Amount:</strong> ₹{finalAmount.toLocaleString()}</p>
+                  {amountPaid && <p><strong>Amount Paid:</strong> ₹{Number(amountPaid).toLocaleString()}</p>}
+                  {signatureData && (
+                    <div className="mt-8 pt-4 border-t">
+                      <p className="text-sm text-muted-foreground mb-2">Authorized Signatory:</p>
+                      <img src={signatureData} alt="Signature" className="h-16" />
+                      <p className="text-xs mt-1">{timestamp}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Always show line items read-only in closed state */}
+                <div className="print:block">
+                  {renderLineItems("rawMaterials")}
+                  {renderLineItems("packaging")}
+                  {renderLineItems("logistics")}
+                  {renderLineItems("crew")}
+                </div>
+                
+                <div className="p-4 bg-muted/20 rounded-xl mt-4 flex justify-between items-center print:bg-transparent print:p-0 print:mt-4">
+                  <div>
+                    <p className="text-muted-foreground text-sm">Total Billed</p>
+                    <p className="text-xl font-bold">₹{finalAmount.toLocaleString()}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-muted-foreground text-sm">Amount Paid</p>
+                    <p className="text-xl font-bold text-success">₹{Number(amountPaid || 0).toLocaleString()}</p>
+                  </div>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showFinalizeModal && !closureComplete} onOpenChange={setShowFinalizeModal}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Confirm Final Batch Closure</DialogTitle>
-          </DialogHeader>
-
-          <AnimatePresence mode="wait">
-            {showReopenDialog ? (
-              <motion.div key="reopen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                <p className="text-sm text-muted-foreground">Add notes for reopening this batch costing:</p>
-                <Textarea value={reopenNotes} onChange={(e) => setReopenNotes(e.target.value)} placeholder="Reason for reopening..." rows={3} />
-                <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1" onClick={() => setShowReopenDialog(false)}>Cancel</Button>
-                  <Button className="flex-1" onClick={handleReopen}>Confirm Reopen</Button>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div key="confirm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                <div className="p-4 bg-muted/50 rounded-xl space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Invoice ID</span>
-                    <span className="font-medium">{invoice.displayId}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Facility</span>
-                    <span className="font-medium">{invoice.facility}</span>
-                  </div>
-                  <div className="flex justify-between text-sm pt-2 border-t border-border">
-                    <span className="text-muted-foreground">Final Batch Cost</span>
-                    <span className="font-bold text-primary">₹{finalAmount.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-success/10 rounded-xl border border-success/30 space-y-2">
-                  <div className="flex items-center gap-2 text-success">
-                    <CheckCircle className="w-5 h-5" />
-                    <span className="font-medium">QA Signature Captured</span>
-                  </div>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p>Timestamp: {timestamp}</p>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1 gap-2" onClick={() => setShowReopenDialog(true)}>
-                    <Undo className="w-4 h-4" /> Reopen Costing
-                  </Button>
-                  <Button className="flex-1 gap-2 bg-success hover:bg-success/90" onClick={handleFinalizeClosure}>
-                    <CheckCircle className="w-4 h-4" /> Lock & Submit
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+      <Dialog open={showFinalizeModal} onOpenChange={setShowFinalizeModal}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Confirm Closure</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Total Billed: ₹{finalAmount.toLocaleString()}</p>
+            <p className="text-sm font-bold text-success">Amount Paid: ₹{Number(amountPaid).toLocaleString()}</p>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setShowFinalizeModal(false)}>Cancel</Button>
+              <Button className="flex-1 bg-success hover:bg-success/90" onClick={handleAdminFinalize} disabled={isSubmitting}>
+                {isSubmitting ? "Saving..." : "Lock & Close"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>

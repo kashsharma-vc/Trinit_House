@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { AppSidebar } from "./AppSidebar";
 import { Header } from "./Header";
+import { AIAssistantWidget } from "../AIAssistantWidget";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -27,6 +28,9 @@ export function MainLayout({ children }: MainLayoutProps) {
           {children}
         </motion.main>
       </div>
+      
+      {/* Global AI Assistant Floating Widget */}
+      <AIAssistantWidget />
     </div>
   );
 }
