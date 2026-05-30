@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Bell, Search, User, Calendar, MapPin, Settings2, CheckCircle } from "lucide-react";
+import { Bell, Search, User, Calendar, MapPin, Settings2, CheckCircle, Menu } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,10 @@ import {
 
 interface HeaderProps {
   onFilterChange?: (filters: any) => void;
+  setMobileMenuOpen?: (open: boolean) => void;
 }
 
-export function Header({ onFilterChange }: HeaderProps) {
+export function Header({ onFilterChange, setMobileMenuOpen }: HeaderProps) {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<any[]>([]);
 
@@ -52,10 +53,24 @@ export function Header({ onFilterChange }: HeaderProps) {
     };
   
     fetchNotifications();
-    // Optional: Set up an interval to poll for notifications every minute
-    // const interval = setInterval(fetchNotifications, 60000);
-    // return () => clearInterval(interval);
+    // Poll for notifications every 60 seconds
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
   }, []);
+
+  const handleMarkRead = async (notificationId: number) => {
+    const token = localStorage.getItem("token") || localStorage.getItem("authToken");
+    if (!token) return;
+    try {
+      await fetch(`${API_BASE_URL}/notifications/read/${notificationId}/`, {
+        method: "POST",
+        headers: { Authorization: `Token ${token}` }
+      });
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    } catch (e) {
+      console.error("Failed to mark notification as read", e);
+    }
+  };
 
   return (
     <motion.header 
@@ -63,11 +78,23 @@ export function Header({ onFilterChange }: HeaderProps) {
       animate={{ y: 0, opacity: 1 }}
       className="sticky top-0 z-30 bg-card/95 backdrop-blur-md border-b border-border"
     >
-      <div className="flex items-center justify-between h-16 px-6">
-        {/* Search */}
-        <div className="relative w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Search requests..." className="pl-10 bg-muted/50 border-0" />
+      <div className="flex items-center justify-between h-16 px-4 md:px-6">
+        <div className="flex items-center gap-3">
+          {/* Mobile Menu Toggle */}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="md:hidden"
+            onClick={() => setMobileMenuOpen?.(true)}
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+          
+          {/* Search */}
+          <div className="relative w-full max-w-[200px] md:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Search requests..." className="pl-10 bg-muted/50 border-0" />
+          </div>
         </div>
 
         {/* Actions */}
@@ -90,9 +117,13 @@ export function Header({ onFilterChange }: HeaderProps) {
               <DropdownMenuSeparator />
               {notifications.length > 0 ? (
                 notifications.map((n) => (
-                  <DropdownMenuItem key={n.id} className="cursor-pointer py-3 border-b flex flex-col items-start">
+                  <DropdownMenuItem 
+                    key={n.id} 
+                    className="cursor-pointer py-3 border-b flex flex-col items-start"
+                    onClick={() => handleMarkRead(n.id)}
+                  >
                     <span className="text-sm font-medium">{n.message}</span>
-                    <span className="text-xs text-muted-foreground">{n.created_at}</span>
+                    <span className="text-xs text-muted-foreground">{n.created_at} · tap to dismiss</span>
                   </DropdownMenuItem>
                 ))
               ) : (
@@ -108,7 +139,7 @@ export function Header({ onFilterChange }: HeaderProps) {
                 <div className="hidden md:block text-right mr-1">
                   <p className="text-sm font-bold leading-none">{user.username}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {user.is_superuser ? "Administrator" : "Technician"}
+                    {user.role || (user.is_superuser ? "Administrator" : "Technician")}
                   </p>
                 </div>
                 <User className="w-4 h-4" />
@@ -120,13 +151,16 @@ export function Header({ onFilterChange }: HeaderProps) {
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">{user.username}</p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    {user.is_superuser ? "Administrator Account" : "Service Technician Account"}
+                    {user.role ? `${user.role} Account` : (user.is_superuser ? "Administrator Account" : "Service Technician Account")}
                   </p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               
-              <DropdownMenuItem className="cursor-pointer">Profile Settings</DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer" onClick={() => navigate("/profile")}>
+                Profile Settings
+              </DropdownMenuItem>
+
               <DropdownMenuSeparator />
               
               {/* Secure Logout */}

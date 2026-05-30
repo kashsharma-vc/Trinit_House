@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { motion } from "framer-motion";
 import { AppSidebar } from "./AppSidebar";
 import { Header } from "./Header";
@@ -9,14 +9,23 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children }: MainLayoutProps) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-slate-50 flex overflow-hidden">
-      {/* Sidebar strictly handles its own role-based rendering now */}
-      <AppSidebar />
+    <div className="min-h-screen bg-slate-50 flex overflow-hidden w-full relative">
+      {/* Overlay for mobile when sidebar is open */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 z-30 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
       
-      {/* Main content area - offset by sidebar width */}
-      <div className="flex-1 ml-[260px] flex flex-col min-h-screen transition-all duration-300">
-        <Header />
+      <AppSidebar mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen} />
+      
+      {/* Main content area - full width on mobile, offset on desktop */}
+      <div className="flex-1 flex flex-col min-h-screen transition-all duration-300 w-full md:ml-[260px]">
+        <Header setMobileMenuOpen={setMobileMenuOpen} />
         
         <motion.main
           key="main-content"

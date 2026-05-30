@@ -1,4 +1,7 @@
 from django.db import models
+from django.db.models import JSONField
+from django.contrib.auth.models import User
+
 
 class SetupMaster(models.Model):
     """
@@ -12,7 +15,7 @@ class SetupMaster(models.Model):
     class Meta:
         abstract = True
 
-# Add these to your backend/setups/models.py or where your setup models live
+
 class AppModule(models.Model):
     name = models.CharField(max_length=100)  # e.g., "Core", "Operations"
     order = models.IntegerField(default=0)
@@ -20,11 +23,12 @@ class AppModule(models.Model):
     def __str__(self):
         return self.name
 
+
 class AppFeature(models.Model):
     module = models.ForeignKey(AppModule, related_name='features', on_delete=models.CASCADE)
     feature_key = models.CharField(max_length=100, unique=True)  # e.g., "my_tickets"
     label = models.CharField(max_length=100)  # e.g., "My Tickets"
-    
+
     def __str__(self):
         return self.label
 
@@ -32,7 +36,7 @@ class AppFeature(models.Model):
 class Role(SetupMaster):
     role_name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
- 
+
     def __str__(self):
         return self.role_name
 
@@ -56,14 +60,13 @@ class Workshop(SetupMaster):
     def __str__(self):
         return f"{self.workshop_name} ({self.zone.zone_name})"
 
+
 class Category(SetupMaster):
     category_name = models.CharField(max_length=100, unique=True)
 
     def __str__(self):
         return self.category_name
-    
 
-# Add this to the bottom of setups/models.py
 
 class Compressor(SetupMaster):
     compressor_type = models.CharField(max_length=150)
@@ -75,16 +78,49 @@ class Compressor(SetupMaster):
 
     def __str__(self):
         return f"{self.compressor_type} - {self.model_name}"
-    
 
-from django.db.models import JSONField # To store the permission checkboxes
 
 class RoleAccessMapping(SetupMaster):
     role = models.ForeignKey('Role', on_delete=models.CASCADE, related_name='access_mappings')
-    site_id = models.CharField(max_length=50) # Stores the ID of the selected site
-    permissions = JSONField(default=dict, blank=True) # Stores { "core:my_tickets": { "view": true, "create": false } }
-    #permissions = models.JSONField(default=dict, blank=True, null=True)
+    site_id = models.CharField(max_length=50)  # Stores the ID of the selected site
+    permissions = JSONField(default=dict, blank=True)  # Stores { "core:my_tickets": { "view": true, "create": false } }
 
     def __str__(self):
         return f"{self.role.role_name} - Site: {self.site_id}"
 
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    profile_picture = models.ImageField(upload_to='profiles/', blank=True, null=True)
+
+    # role can be "Admin", "Technician", etc.
+    role = models.CharField(max_length=50, blank=True, null=True)
+    zone = models.ForeignKey('Zone', on_delete=models.SET_NULL, null=True, blank=True)
+
+    # OTP fields for password recovery
+    otp_code = models.CharField(max_length=6, blank=True, null=True)
+    otp_created_at = models.DateTimeField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile"
+
+
+class SOPStageTemplate(SetupMaster):
+    name = models.CharField(max_length=100)
+    purpose = models.CharField(max_length=255, blank=True, null=True)
+    sequence = models.IntegerField(default=1)
+    applicable_request_type = models.CharField(max_length=50, blank=True, null=True, help_text="e.g., Repair, Inspection. Leave blank for all.")
+
+    def __str__(self):
+        return f"Template: {self.name} (Seq {self.sequence})"
+
+
+class ChecklistTemplate(SetupMaster):
+    stage_template = models.ForeignKey(SOPStageTemplate, related_name='checklists', on_delete=models.CASCADE)
+    text = models.CharField(max_length=255)
+    requires_doc = models.BooleanField(default=False)
+    requires_photo = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.text} (Doc: {self.requires_doc}, Photo: {self.requires_photo})"

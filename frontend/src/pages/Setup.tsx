@@ -19,7 +19,8 @@ const setupTabs = [
   { id: "workshops", label: "Workshop Masters", description: "Configure workshop locations", icon: Building2 },  
   { id: "categories", label: "Category Master", description: "Manage compressor categories", icon: Tag },  
   { id: "compressors", label: "Compressor Types", description: "Configure compressor categories", icon: Wrench },  
-  { id: "sop", label: "SOP Settings", description: "Manage SOP templates and versions", icon: FileText },  
+  { id: "sop_stages", label: "SOP Stages", description: "Manage dynamic SOP stages", icon: FileText },  
+  { id: "checklists", label: "Checklists", description: "Manage stage checklists", icon: FileText },  
   { id: "sla", label: "SLA Settings", description: "Configure SLA thresholds and penalties", icon: Clock },  
   { id: "inventory", label: "Inventory Masters", description: "Manage spare parts catalog", icon: Package },  
   { id: "audit", label: "Audit & Compliance", description: "Configure audit settings", icon: History },
@@ -40,17 +41,22 @@ export default function Setup() {
   const [liveWorkshops, setLiveWorkshops] = useState<any[]>([]);
   const [liveModules, setLiveModules] = useState<any[]>([]);
   const [liveFeatures, setLiveFeatures] = useState<any[]>([]);
+  const [liveSOPStages, setLiveSOPStages] = useState<any[]>([]);
+  const [liveChecklists, setLiveChecklists] = useState<any[]>([]);
 
   // --- 2. REUSABLE FETCH FUNCTION ---
   const fetchData = async () => {    
     try {      
-      const [compRes, catRes, zoneRes, wsRes, modRes, featRes] = await Promise.all([        
-        fetch(`${API_BASE_URL}/setups/compressors/`),        
-        fetch(`${API_BASE_URL}/setups/categories/`),        
-        fetch(`${API_BASE_URL}/setups/zones/`),        
-        fetch(`${API_BASE_URL}/setups/workshops/`),
-        fetch(`${API_BASE_URL}/setups/features-master/`),
-        fetch(`${API_BASE_URL}/setups/app-features/`)
+      const headers = { "Authorization": `Token ${localStorage.getItem('token')}` };
+      const [compRes, catRes, zoneRes, wsRes, modRes, featRes, sopRes, chkRes] = await Promise.all([        
+        fetch(`${API_BASE_URL}/setups/compressors/`, { headers }),        
+        fetch(`${API_BASE_URL}/setups/categories/`, { headers }),        
+        fetch(`${API_BASE_URL}/setups/zones/`, { headers }),        
+        fetch(`${API_BASE_URL}/setups/workshops/`, { headers }),
+        fetch(`${API_BASE_URL}/setups/features-master/`, { headers }),
+        fetch(`${API_BASE_URL}/setups/app-features/`, { headers }),
+        fetch(`${API_BASE_URL}/setups/sop-templates/`, { headers }),
+        fetch(`${API_BASE_URL}/setups/checklist-templates/`, { headers })
       ]);      
 
       const compData = await compRes.json();      
@@ -59,6 +65,8 @@ export default function Setup() {
       const wsData = await wsRes.json();      
       const modData = await modRes.json();
       const featData = await featRes.json();
+      const sopData = await sopRes.json();
+      const chkData = await chkRes.json();
 
       // Safely extract arrays      
       const rawCompressors = Array.isArray(compData) ? compData : (compData.results || []);      
@@ -67,6 +75,8 @@ export default function Setup() {
       const rawWorkshops = Array.isArray(wsData) ? wsData : (wsData.results || []);
       const rawModules = Array.isArray(modData) ? modData : (modData.results || []);
       const rawFeatures = Array.isArray(featData) ? featData : (featData.results || []);      
+      const rawSOP = Array.isArray(sopData) ? sopData : (sopData.results || []);      
+      const rawChk = Array.isArray(chkData) ? chkData : (chkData.results || []);      
 
       // MAP 1: Categories      
       setLiveCategories(rawCategories.map((c: any) => ({        
@@ -114,6 +124,25 @@ export default function Setup() {
         moduleId: f.module,
         moduleName: rawModules.find((m: any) => m.id === f.module)?.title || "Unknown Module"
       })));
+
+      setLiveSOPStages(rawSOP.map((item: any) => ({
+        id: item.id,
+        applicableRequestType: item.applicable_request_type,
+        name: item.name,
+        sequence: item.sequence,
+        purpose: item.purpose
+      })));
+
+      setLiveChecklists(rawChk.map((c: any) => ({
+        id: c.id,
+        stageId: c.stage_template,  // FK field name in model is stage_template
+        stageName: rawSOP.find((s: any) => s.id === c.stage_template)?.name || "Unknown",
+        itemText: c.text,            // model field is 'text' not 'item_text'
+        requiresDoc: c.requires_doc ? "Yes" : "No",
+        requiresPhoto: c.requires_photo ? "Yes" : "No",
+        sequence: c.sequence
+      })));
+
     } catch (error) {      
       console.error("Failed to fetch setup data from Django:", error);    
     }  
@@ -143,7 +172,7 @@ export default function Setup() {
 
   // --- 3. DYNAMIC DELETE FUNCTION ---
   const handleDelete = async (collection: string, id: string, name: string) => {    
-    const isLiveEndpoint = ['zones', 'workshops', 'categories', 'compressors', 'app-features'].includes(collection);
+    const isLiveEndpoint = ['zones', 'workshops', 'categories', 'compressors', 'app-features', 'sop-templates', 'checklist-templates'].includes(collection);
 
     if (isLiveEndpoint) {
       try {
@@ -168,7 +197,7 @@ export default function Setup() {
       return;    
     }    
 
-    const isLiveEndpoint = ['zones', 'workshops', 'categories', 'compressors', 'app-features'].includes(collection);
+    const isLiveEndpoint = ['zones', 'workshops', 'categories', 'compressors', 'app-features', 'sop-templates', 'checklist-templates'].includes(collection);
     
     // Convert boolean toggles to Active/Inactive strings if needed
     const statusVal = data.status === true || data.status === 'Active' ? 'Active' : 'Inactive';
@@ -195,12 +224,30 @@ export default function Setup() {
           label: data.label, 
           module: data.moduleId 
         };
+      } else if (collection === 'sop-templates') {
+        payload = {
+          applicable_request_type: data.applicableRequestType || '',
+          name: data.name,
+          sequence: Number(data.sequence),
+          purpose: data.purpose || ''
+        };
+      } else if (collection === 'checklist-templates') {
+        payload = {
+          stage_template: data.stageId,  // FK field is 'stage_template' in the model
+          text: data.itemText,            // model field is 'text'
+          requires_doc: data.requiresDoc === true || data.requiresDoc === 'Yes',
+          requires_photo: data.requiresPhoto === true || data.requiresPhoto === 'Yes',
+          sequence: Number(data.sequence)
+        };
       }
 
       try {
         const response = await fetch(url, {
           method,
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Token ${localStorage.getItem("token")}`
+          },
           body: JSON.stringify(payload)
         });
 
@@ -434,63 +481,81 @@ export default function Setup() {
             />          
           </>        
         );      
-      case 'sop':        
+      case 'sop_stages':        
         return (          
           <>            
             <MasterList              
-              title="SOP Settings"              
-              data={store.sops}              
+              title="SOP Stages"              
+              data={liveSOPStages}              
               columns={[                
-                { key: 'sopReference', label: 'SOP Reference', sortable: true },                
-                { key: 'compressorType', label: 'Compressor Type' },                
-                { key: 'version', label: 'Version' },                
-                { key: 'title', label: 'Title' },                
-                { key: 'totalSteps', label: 'Steps' },                
-                { key: 'sopStatus', label: 'SOP Status' },                
-                { key: 'effectiveDate', label: 'Effective Date' },              
+                { key: 'applicableRequestType', label: 'Request Type', sortable: true },                
+                { key: 'name', label: 'Stage Name' },                
+                { key: 'sequence', label: 'Sequence' },                
+                { key: 'purpose', label: 'Purpose' }              
               ]}              
-              onAdd={handleAdd}              
+              onAdd={handleAdd}
               onEdit={handleEdit}              
-              onView={handleView}              
-              onDelete={(id) => handleDelete('sops', id, 'SOP')}              
-              addButtonText="Add SOP"              
-              searchPlaceholder="Search SOPs..."              
-              searchKeys={['sopReference', 'compressorType', 'title']}            
+              onView={handleView}
+              onDelete={(id) => handleDelete('sop-templates', id, 'SOP Stage')}
+              addButtonText="Add SOP Stage"
+              searchPlaceholder="Search SOP stages..."              
+              searchKeys={['applicableRequestType', 'name']}            
             />            
             <MasterDetailModal              
               open={modalOpen}              
               onClose={() => setModalOpen(false)}              
-              title="SOP Version Control"              
-              subtitle="Manage SOP templates and versions"              
+              title="SOP Stage Template"              
+              subtitle="Manage dynamic SOP stages"              
               icon={<FileText className="w-5 h-5" />}              
               mode={modalMode}              
               idPrefix="SOP"              
               initialData={selectedItem || {}}              
-              onSave={(data) => {                
-                const compressor = liveCompressors.find(c => c.id === data.compressorId);                
-                const role = store.roles.find(r => r.id === data.approvedById);                
-                handleSave('sops', modalMode === 'edit' ? {                   
-                  ...selectedItem, ...data, compressorType: compressor?.compressorType, approvedBy: role?.roleName                
-                } : {                   
-                  ...data, compressorType: compressor?.compressorType, approvedBy: role?.roleName                
-                }, modalMode);              
-              }}              
+              onSave={(data) => handleSave('sop-templates', modalMode === 'edit' ? { ...selectedItem, ...data } : data, modalMode)}              
               fields={[                
-                { name: 'sopReference', label: 'SOP Reference', type: 'text', required: true, placeholder: 'e.g., SOP-ELG-01' },                
-                { name: 'compressorId', label: 'Compressor Type', type: 'select', required: true, options: getOptions(liveCompressors, 'compressorType'), showLink: true },                
-                { name: 'version', label: 'Version', type: 'text', required: true, placeholder: 'e.g., v2.1' },                
-                { name: 'title', label: 'Title', type: 'text', required: true, placeholder: 'SOP title' },                
-                { name: 'totalSteps', label: 'Total Steps', type: 'number', placeholder: 'Number of steps' },                
-                { name: 'stepDetails', label: 'Step Details', type: 'textarea', placeholder: 'Step 1: Disconnect power...' },                
-                { name: 'approvedById', label: 'Approved By', type: 'select', options: getOptions(store.roles, 'roleName'), showLink: true },                
-                { name: 'effectiveDate', label: 'Effective Date', type: 'date' },                
-                { name: 'reviewCycle', label: 'Review Cycle (Months)', type: 'number', placeholder: '12' },                
-                { name: 'sopStatus', label: 'SOP Status', type: 'select', options: [                  
-                  { value: 'Draft', label: 'Draft' },                  
-                  { value: 'Active', label: 'Active' },                  
-                  { value: 'Retired', label: 'Retired' },                
-                ] },                
-                { name: 'status', label: 'Status', type: 'toggle', defaultValue: true },              
+                { name: 'applicableRequestType', label: 'Request Type (Leave blank for all)', type: 'text', placeholder: 'e.g., Repair, Inspection' },                
+                { name: 'name', label: 'Stage Name', type: 'text', required: true, placeholder: 'e.g., Dismantling' },                
+                { name: 'sequence', label: 'Sequence', type: 'number', required: true, placeholder: 'Order (e.g. 1)' },                
+                { name: 'purpose', label: 'Purpose', type: 'textarea', placeholder: 'Details about this stage' }              
+              ]}            
+            />          
+          </>        
+        );      
+      case 'checklists':        
+        return (          
+          <>            
+            <MasterList              
+              title="Checklist Templates"              
+              data={liveChecklists}              
+              columns={[                
+                { key: 'stageName', label: 'SOP Stage', sortable: true },                
+                { key: 'itemText', label: 'Checklist Item' },                
+                { key: 'sequence', label: 'Sequence' },                
+                { key: 'isMandatory', label: 'Mandatory' },              
+              ]}              
+              onAdd={handleAdd}              
+              onEdit={handleEdit}              
+              onView={handleView}              
+              onDelete={(id) => handleDelete('checklist-templates', id, 'Checklist Item')}              
+              addButtonText="Add Checklist Item"              
+              searchPlaceholder="Search checklists..."              
+              searchKeys={['stageName', 'itemText']}            
+            />            
+            <MasterDetailModal              
+              open={modalOpen}              
+              onClose={() => setModalOpen(false)}              
+              title="Checklist Item Template"              
+              subtitle="Manage checks for SOP stages"              
+              icon={<FileText className="w-5 h-5" />}              
+              mode={modalMode}              
+              idPrefix="CHK"              
+              initialData={selectedItem || {}}              
+              onSave={(data) => handleSave('checklist-templates', modalMode === 'edit' ? { ...selectedItem, ...data } : data, modalMode)}              
+              fields={[                
+                { name: 'stageId', label: 'SOP Stage', type: 'select', required: true, options: getOptions(liveSOPStages, 'name'), showLink: true },                
+                { name: 'itemText', label: 'Checklist Text', type: 'text', required: true, placeholder: 'e.g., Verify oil level' },                
+                { name: 'sequence', label: 'Sequence', type: 'number', required: true, placeholder: 'Order (e.g. 1)' },
+                { name: 'requiresDoc', label: 'Requires Document Upload?', type: 'toggle', defaultValue: false },
+                { name: 'requiresPhoto', label: 'Requires Photo Evidence?', type: 'toggle', defaultValue: false },
               ]}            
             />          
           </>        

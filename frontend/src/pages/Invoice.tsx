@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { API_BASE_URL } from "@/lib/api";
 import { MainLayout } from "@/components/layout/MainLayout";
@@ -70,7 +71,8 @@ export default function Invoice() {
       const rawBatches = Array.isArray(batchData) ? batchData : (batchData.results || []);
 
       const usedBatchIds = rawInvoices.map((inv: any) => inv.job_code);
-      setAvailableBatches(rawBatches.filter((b: any) => !usedBatchIds.includes(b.id)));
+      // Only allow invoices for Closed requests
+      setAvailableBatches(rawBatches.filter((b: any) => !usedBatchIds.includes(b.id) && b.status === "Closed"));
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -193,13 +195,26 @@ export default function Invoice() {
             <Input type="number" value={newInvoice.total_amount} onChange={(e) => setNewInvoice({...newInvoice, total_amount: parseFloat(e.target.value)})} />
             
             <Button className="w-full mt-4" onClick={async () => {
-              const res = await fetch(`${API_BASE_URL}/finance/invoices/`, { 
-                method: "POST", 
-                headers: {"Content-Type":"application/json"}, 
-                body: JSON.stringify(newInvoice) 
-              });
-              if(res.ok) { setAddModalOpen(false); fetchData(); }
-              else { alert("Error: " + await res.text()); }
+              try {
+                const res = await fetch(`${API_BASE_URL}/finance/invoices/`, { 
+                  method: "POST", 
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Token ${localStorage.getItem("token")}`
+                  }, 
+                  body: JSON.stringify(newInvoice) 
+                });
+                if (res.ok) { 
+                  setAddModalOpen(false); 
+                  fetchData(); 
+                  toast.success("Invoice created successfully");
+                } else { 
+                  const errData = await res.json();
+                  toast.error(errData[0] || "Failed to create invoice. Ensure the batch is Closed.");
+                }
+              } catch (e) {
+                toast.error("Network error while creating invoice");
+              }
             }}>Submit</Button>
           </div>
         </DialogContent>

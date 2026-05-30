@@ -50,6 +50,7 @@ class ServiceRequest(models.Model):
     assigned_role = models.CharField(max_length=50, blank=True, null=True)
 
     def save(self, *args, **kwargs):
+        is_new = not self.pk
         # 1. Generate Request ID automatically
         if not self.request_id:
             year = timezone.now().year
@@ -65,6 +66,32 @@ class ServiceRequest(models.Model):
             self.expected_completion_date = timezone.now() + timezone.timedelta(days=int(self.sla_days or 3))
 
         super().save(*args, **kwargs)
+
+        if is_new:
+            from setups.models import SOPStageTemplate, ChecklistTemplate
+            from django.db.models import Q
+            # Find applicable templates
+            templates = SOPStageTemplate.objects.filter(
+                Q(applicable_request_type=self.request_type) | 
+                Q(applicable_request_type__isnull=True) | 
+                Q(applicable_request_type="")
+            ).order_by('sequence')
+
+            for tmpl in templates:
+                stage = SOPStage.objects.create(
+                    service_request=self,
+                    name=tmpl.name,
+                    purpose=tmpl.purpose,
+                    sequence=tmpl.sequence,
+                    status="pending"
+                )
+                for cl_tmpl in tmpl.checklists.all():
+                    ChecklistItem.objects.create(
+                        stage=stage,
+                        text=cl_tmpl.text,
+                        requires_doc=cl_tmpl.requires_doc,
+                        requires_photo=cl_tmpl.requires_photo
+                    )
 
     def __str__(self):
         return f"{self.request_id} - {self.request_type}"

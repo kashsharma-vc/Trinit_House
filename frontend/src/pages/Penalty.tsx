@@ -50,6 +50,7 @@ export default function Penalty() {
   
   // Backend State
   const [penalties, setPenalties] = useState<BreachCase[]>([]);
+  const [liveWorkshops, setLiveWorkshops] = useState<any[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<BreachCase>>({ 
@@ -77,6 +78,12 @@ export default function Penalty() {
 
   useEffect(() => {
     fetchPenalties();
+    // Also fetch workshops for the Log Breach dropdown
+    const token = localStorage.getItem("token") || localStorage.getItem("authToken");
+    fetch(`${API_BASE_URL}/setups/workshops/`, { headers: { Authorization: `Token ${token}` } })
+      .then(r => r.json())
+      .then(data => setLiveWorkshops(Array.isArray(data) ? data : (data.results || [])))
+      .catch(() => {});
   }, []);
 
   // --- 2. DYNAMIC KPI & CHART CALCULATIONS ---
@@ -437,8 +444,40 @@ export default function Penalty() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div><Label>Vendor</Label><Input value={formData.vendor} onChange={(e) => setFormData({...formData, vendor: e.target.value})} /></div>
-              <div><Label>Workshop</Label><Input value={formData.workshop} onChange={(e) => setFormData({...formData, workshop: e.target.value})} /></div>
+              <div>
+                <Label>Workshop</Label>
+                <Select value={formData.workshop} onValueChange={(v) => setFormData({...formData, workshop: v})}>
+                  <SelectTrigger><SelectValue placeholder="Select workshop..."/></SelectTrigger>
+                  <SelectContent>
+                    {liveWorkshops.map((w: any) => (
+                      <SelectItem key={w.id} value={w.workshop_name}>{w.workshop_name}</SelectItem>
+                    ))}
+                    {liveWorkshops.length === 0 && (
+                      <SelectItem value={formData.workshop || ""} disabled>No workshops found</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Vendor</Label>
+                {/* Vendor list is derived from existing penalty records */}
+                <Select value={formData.vendor} onValueChange={(v) => setFormData({...formData, vendor: v})}>
+                  <SelectTrigger><SelectValue placeholder="Type or select vendor..."/></SelectTrigger>
+                  <SelectContent>
+                    {[...new Set(penalties.map(p => p.vendor).filter(Boolean))].map((v: any) => (
+                      <SelectItem key={v} value={v}>{v}</SelectItem>
+                    ))}
+                    <SelectItem value="__new__" disabled>── or type below ──</SelectItem>
+                  </SelectContent>
+                </Select>
+                {/* Also allow typing a new vendor name */}
+                <Input 
+                  className="mt-1" 
+                  placeholder="Or type new vendor name..." 
+                  value={formData.vendor || ""}
+                  onChange={(e) => setFormData({...formData, vendor: e.target.value})} 
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div><Label>Days Delayed</Label><Input type="number" value={formData.delayed} onChange={(e) => setFormData({...formData, delayed: Number(e.target.value)})} /></div>

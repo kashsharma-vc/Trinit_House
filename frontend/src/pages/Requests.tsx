@@ -53,10 +53,10 @@ export default function Requests() {
   const [compressors, setCompressors] = useState<any[]>([]);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
 
   // Role-based assignment state
   const [selectedRole, setSelectedRole] = useState<string>("");
-  const standardRoles = ["Technician", "Workshop Manager", "Supervisor", "Operator"];
 
   const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState(initialFormData);
@@ -84,12 +84,13 @@ export default function Requests() {
       setIsLoading(true);
 
       try {
-        const [reqRes, zoneRes, wsRes, compRes, techRes] = await Promise.all([
+        const [reqRes, zoneRes, wsRes, compRes, techRes, rolesRes] = await Promise.all([
           fetch(`${API_BASE_URL}/operations/requests/`, { headers }),
           fetch(`${API_BASE_URL}/setups/zones/`, { headers }),
           fetch(`${API_BASE_URL}/setups/workshops/`, { headers }),
           fetch(`${API_BASE_URL}/setups/compressors/`, { headers }),
           fetch(`${API_BASE_URL}/setups/technicians/`, { headers }),
+          fetch(`${API_BASE_URL}/setups/roles/`, { headers }),
         ]);
 
         if (reqRes.status === 401 || reqRes.status === 403) {
@@ -117,6 +118,11 @@ export default function Requests() {
         setZones(Array.isArray(zoneData) ? zoneData : zoneData.results || []);
         setWorkshops(Array.isArray(wsData) ? wsData : wsData.results || []);
         setCompressors(Array.isArray(compData) ? compData : compData.results || []);
+        
+        if (rolesRes.ok) {
+          const rolesData = await rolesRes.json();
+          setRoles(Array.isArray(rolesData) ? rolesData : rolesData.results || []);
+        }
       } catch (err) {
         console.error("Initialization Error:", err);
         toast.error("Failed to load dashboard data.");
@@ -163,15 +169,16 @@ export default function Requests() {
     // 1. If your API is working, filter safely using case-insensitivity
     if (availableUsers && availableUsers.length > 0) {
       return availableUsers.filter((user) => {
-        const userRole = (user.role || user.department || "").toLowerCase();
+        const userRole = (user.role || user.department || "").toLowerCase().trim();
+        const safeTargetRole = targetRole.trim();
         
         // FALLBACK: If looking for a Technician and the user has no explicit role attribute,
         // assume they are a technician so they don't get hidden.
-        if (targetRole === "technician" && !userRole && !user.is_superuser) {
+        if (safeTargetRole === "technician" && !userRole && !user.is_superuser) {
           return true;
         }
         
-        return userRole === targetRole;
+        return userRole === safeTargetRole;
       });
     }
 
@@ -528,9 +535,9 @@ export default function Requests() {
                         <SelectValue placeholder="Select Role/Department" />
                       </SelectTrigger>
                       <SelectContent>
-                        {standardRoles.map((role) => (
-                          <SelectItem key={role} value={role}>
-                            {role}
+                        {roles.map((role) => (
+                          <SelectItem key={role.id} value={role.role_name}>
+                            {role.role_name}
                           </SelectItem>
                         ))}
                       </SelectContent>

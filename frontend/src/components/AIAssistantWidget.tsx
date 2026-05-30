@@ -8,9 +8,24 @@ import { cn } from "@/lib/utils";
 export function AIAssistantWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const [chatLog, setChatLog] = useState<{ role: "user" | "ai"; content: string }[]>([
-    { role: "ai", content: "Hello Admin! I'm your automated Gemini Assistant. I can summarize dashboards, log penalties, raise requests, or manage warranty calls for you. How can I help?" }
-  ]);
+  const [chatLog, setChatLog] = useState<{ role: "user" | "ai"; content: string }[]>(() => {
+    const userString = localStorage.getItem("user");
+    const user = userString ? JSON.parse(userString) : null;
+    
+    const userName = user?.first_name || user?.username || (user?.is_superuser ? "Admin" : "User");
+    
+    const hour = new Date().getHours();
+    let timeGreeting = "Good evening";
+    if (hour < 12) timeGreeting = "Good morning";
+    else if (hour < 18) timeGreeting = "Good afternoon";
+
+    return [
+      { 
+        role: "ai", 
+        content: `Namaste! ${timeGreeting} ${userName}! I am Trinity Assistant. How can I help?`
+      }
+    ];
+  });
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -55,7 +70,7 @@ export function AIAssistantWidget() {
     <>
       {/* Floating Action Button (The "Ball") */}
       <motion.button
-        className="fixed bottom-8 right-8 w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center z-50 hover:shadow-indigo-500/50 transition-shadow focus:outline-none focus:ring-4 focus:ring-indigo-300"
+        className="fixed bottom-8 right-8 w-16 h-16 bg-gradient-to-r from-primary to-primary/90 text-white rounded-full shadow-2xl flex items-center justify-center z-50 hover:shadow-indigo-500/50 transition-shadow focus:outline-none focus:ring-4 focus:ring-indigo-300"
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(true)}
@@ -76,31 +91,31 @@ export function AIAssistantWidget() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed bottom-8 right-8 w-[400px] h-[600px] bg-white rounded-2xl shadow-2xl z-50 flex flex-col border border-slate-200 overflow-hidden"
+            className="fixed bottom-8 right-8 w-[400px] h-[600px] bg-white rounded-2xl shadow-2xl z-50 flex flex-col border border-primary/20 overflow-hidden"
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white flex items-center justify-between">
+            <div className="bg-gradient-to-r from-primary to-primary/90 p-4 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Bot className="w-6 h-6" />
                 <h3 className="font-bold text-lg">TRINITY ASSISTANCE </h3>
               </div>
               <button 
                 onClick={() => setIsOpen(false)}
-                className="text-white/80 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10"
+                className="text-primary-foreground/80 hover:text-primary-foreground transition-colors p-1 rounded-full hover:bg-primary-foreground/10"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Chat Area */}
-            <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto bg-slate-50 space-y-4">
+            <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto bg-primary/5  space-y-4">
               {chatLog.map((chat, idx) => (
                 <div key={idx} className={cn("flex w-full", chat.role === "user" ? "justify-end" : "justify-start")}>
                   <div className={cn(
                     "max-w-[80%] rounded-2xl p-3 shadow-sm",
                     chat.role === "user" 
-                      ? "bg-indigo-600 text-white rounded-tr-sm" 
-                      : "bg-white border border-slate-200 text-slate-800 rounded-tl-sm whitespace-pre-wrap"
+                      ? "bg-primary text-white rounded-tr-sm" 
+                      : "bg-primary/5 border border-primary/20 text-primary rounded-tl-sm whitespace-pre-wrap"
                   )}>
                     {chat.content}
                   </div>
@@ -108,21 +123,21 @@ export function AIAssistantWidget() {
               ))}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-white border border-slate-200 text-slate-500 rounded-2xl rounded-tl-sm p-4 shadow-sm flex items-center gap-2">
-                    <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.5 }} className="w-2 h-2 bg-indigo-400 rounded-full"/>
-                    <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }} className="w-2 h-2 bg-indigo-400 rounded-full"/>
-                    <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.4 }} className="w-2 h-2 bg-indigo-400 rounded-full"/>
+                  <div className="">
+                    <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.5 }} className="w-2 h-2 bg-primary/60 rounded-full"/>
+                    <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.2 }} className="w-2 h-2 bg-primary/60 rounded-full"/>
+                    <motion.div animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.5, delay: 0.4 }} className="w-2 h-2 bg-primary/60 rounded-full"/>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Input Area */}
-            <div className="p-4 bg-white border-t border-slate-100 flex items-center gap-2">
+            <div className="p-4 bg-primary/5 border-t border-primary/20 flex items-center gap-2">
               <input
                 type="text"
                 placeholder="Ask me to automate something..."
-                className="flex-1 bg-slate-100 border-transparent focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-full px-4 py-2 text-sm transition-all outline-none"
+                className="flex-1 bg-primary/10 border-transparent focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-full px-4 py-2 text-sm transition-all outline-none"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
@@ -130,7 +145,7 @@ export function AIAssistantWidget() {
               <Button 
                 onClick={handleSend}
                 disabled={!message.trim() || isLoading}
-                className="rounded-full w-10 h-10 p-0 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 shrink-0"
+                className="rounded-full w-10 h-10 p-0 flex items-center justify-center bg-primary hover:bg-primary/90  shrink-0"
               >
                 <Send className="w-4 h-4 text-white -ml-0.5" />
               </Button>

@@ -25,6 +25,8 @@ import {
 } from "@/components/dashboard/DataTable";
 
 import { MainLayout } from "@/components/layout/MainLayout";
+import { API_BASE_URL } from "@/lib/api";
+import { useEffect, useState } from "react";
 
 // KPI Data
 const kpiData = [
@@ -98,55 +100,7 @@ const kpiData = [
   },
 ];
 
-const recentBatches = [
-  {
-    id: "BAT-2024-0456",
-    zone: "Zone A",
-    workshop: "Blending Plant 1",
-    status: "Open",
-    tat: "3 days",
-  },
-  {
-    id: "BAT-2024-0455",
-    zone: "Zone B",
-    workshop:
-      "Co-Packer Delhi",
-    status: "In Progress",
-    tat: "5 days",
-  },
-  {
-    id: "BAT-2024-0454",
-    zone: "Zone A",
-    workshop: "Blending Plant 2",
-    status: "Closed",
-    tat: "2 days",
-  },
-];
-
-// FIX: batches variable
-const batches = recentBatches;
-
-
-const materialShortages = [
-  {
-    spare:
-      "Whey Concentrate 80%",
-    reorderPoint: 500,
-    vendor: "DairySource Inc",
-    eta: "3 days",
-  },
-];
-
-const qualityEscalations = [
-  {
-    id: "QA-2024-0123",
-    reason:
-      "Clumping Issue",
-    delayed: 5,
-    assignedTo:
-      "Quality Lead",
-  },
-];
+// Dynamic Data Loading handled in component
 
 const requestColumns = [
   { key: "id", header: "Batch ID" },
@@ -211,6 +165,67 @@ const escalatedColumns = [
 ];
 
 export default function Dashboard() {
+  const [batches, setBatches] = useState<any[]>([]);
+  const [qualityEscalations, setQualityEscalations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Still keeping static for material shortages since we don't have an inventory endpoint yet
+  const materialShortages = [
+    { spare: "Whey Concentrate 80%", reorderPoint: 500, vendor: "DairySource Inc", eta: "3 days" },
+  ];
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const headers = { Authorization: `Token ${token}` };
+
+        const [requestsRes, penaltiesRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/operations/requests/`, { headers }),
+          fetch(`${API_BASE_URL}/operations/penalty/cases/`, { headers })
+        ]);
+
+        if (requestsRes.ok) {
+          const reqData = await requestsRes.json();
+          const reqArray = Array.isArray(reqData) ? reqData : reqData.results || [];
+          setBatches(reqArray.map((r: any) => ({
+            id: r.request_id,
+            zone: r.zone?.zone_name || r.assigned_role || "Unassigned",
+            workshop: r.workshop?.workshop_name || r.compressor_model || "General",
+            status: r.status,
+            tat: `${r.sla_tat_days || 0} days`
+          })));
+        }
+
+        if (penaltiesRes.ok) {
+          const penData = await penaltiesRes.json();
+          const penArray = Array.isArray(penData) ? penData : penData.results || [];
+          setQualityEscalations(penArray.map((p: any) => ({
+            id: p.id,
+            reason: p.reason,
+            delayed: p.delayed,
+            assignedTo: p.assignedTo || p.vendor || "Unassigned"
+          })));
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  // Build dynamic KPI values without mutating the constant
+  const dynamicKpiData = kpiData.map((kpi, i) => {
+    if (i === 0) return { ...kpi, value: batches.length.toString() };
+    if (i === 1) return { ...kpi, value: batches.filter(b => b.status === "In Progress" || b.status === "Open").length.toString() };
+    if (i === 2) return { ...kpi, value: batches.filter(b => b.status === "Draft").length.toString() };
+    if (i === 3) return { ...kpi, value: qualityEscalations.length.toString() };
+    return kpi;
+  });
+
   return (
     <MainLayout>
       <motion.div
@@ -235,7 +250,7 @@ export default function Dashboard() {
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
-        {kpiData.map(
+        {dynamicKpiData.map(
           (kpi, index) => (
             <KPICard
               key={kpi.title}
@@ -274,7 +289,7 @@ export default function Dashboard() {
           columns={
             requestColumns
           }
-          data={recentBatches}
+          data={batches}
         />
 
         <DataTable

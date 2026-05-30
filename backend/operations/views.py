@@ -41,115 +41,19 @@ class ServiceRequestViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         request_obj = serializer.save()
 
+        # Notify the assigned technician
         if request_obj.assigned_to:
             tech_user = User.objects.filter(
                 username__iexact=request_obj.assigned_to
             ).first()
             if tech_user:
-                compressor_name = getattr(request_obj, "compressor_id", "Compressor")
+                compressor_name = request_obj.compressor.compressor_type if request_obj.compressor else "Compressor"
                 Notification.objects.create(
                     user=tech_user,
                     message=f"New Task Assigned: {request_obj.request_id} ({compressor_name})"
                 )
-
-        s1 = SOPStage.objects.create(
-            service_request=request_obj,
-            name="Pre-Inspection",
-            purpose="Ensure safety compliance",
-            status="active",
-            sequence=1
-        )
-        ChecklistItem.objects.create(stage=s1, text="Verify lifting points condition", attachment_label="Pre-lift photos")
-        ChecklistItem.objects.create(stage=s1, text="Check lifting equipment certification", requires_doc=True)
-
-        s2 = SOPStage.objects.create(
-            service_request=request_obj,
-            name="Transit",
-            purpose="Ensure safe transport",
-            status="pending",
-            sequence=2
-        )
-        ChecklistItem.objects.create(stage=s2, text="Verify dispatch details", attachment_label="Dispatch document")
-
-        s3 = SOPStage.objects.create(
-            service_request=request_obj,
-            name="Receiving",
-            purpose="Confirm item integrity on arrival",
-            status="pending",
-            sequence=3
-        )
-        ChecklistItem.objects.create(stage=s3, text="Verify delivery challan", requires_doc=True)
-        ChecklistItem.objects.create(stage=s3, text="Inspect packaging condition", requires_photo=True)
-
-        s4 = SOPStage.objects.create(
-            service_request=request_obj,
-            name="Inspection",
-            purpose="Identify faults and scope",
-            status="pending",
-            sequence=4
-        )
-        ChecklistItem.objects.create(stage=s4, text="Perform visual inspection", requires_photo=True)
-        ChecklistItem.objects.create(stage=s4, text="Check leaks / abnormal noise")
-
-        s5 = SOPStage.objects.create(
-            service_request=request_obj,
-            name="Disassembly",
-            purpose="Safe dismantling",
-            status="pending",
-            sequence=5
-        )
-        ChecklistItem.objects.create(stage=s5, text="Disconnect electrical connections")
-        ChecklistItem.objects.create(stage=s5, text="Tag and document removed parts", requires_doc=True)
-
-        s6 = SOPStage.objects.create(
-            service_request=request_obj,
-            name="Cleaning",
-            purpose="Prepare parts for inspection",
-            status="pending",
-            sequence=6
-        )
-        ChecklistItem.objects.create(stage=s6, text="Record cleaning liquid used")
-        ChecklistItem.objects.create(stage=s6, text="Verify cleanliness", requires_photo=True)
-
-        s7 = SOPStage.objects.create(
-            service_request=request_obj,
-            name="Parts Inspection",
-            purpose="Decide Reuse/Repair/Replace",
-            status="pending",
-            sequence=7
-        )
-        ChecklistItem.objects.create(stage=s7, text="Measure dimensional tolerances", requires_doc=True)
-        ChecklistItem.objects.create(stage=s7, text="Mark part decision (Reuse/Replace)")
-
-        s8 = SOPStage.objects.create(
-            service_request=request_obj,
-            name="Assembly",
-            purpose="Restore equipment",
-            status="pending",
-            sequence=8
-        )
-        ChecklistItem.objects.create(stage=s8, text="Install correct spare parts")
-        ChecklistItem.objects.create(stage=s8, text="Apply torque and lubrication")
-
-        s9 = SOPStage.objects.create(
-            service_request=request_obj,
-            name="Testing",
-            purpose="Ensure functional reliability",
-            status="pending",
-            sequence=9
-        )
-        ChecklistItem.objects.create(stage=s9, text="Execute functional tests")
-        ChecklistItem.objects.create(stage=s9, text="Record performance readings", requires_doc=True)
-
-        s10 = SOPStage.objects.create(
-            service_request=request_obj,
-            name="QC Checklist",
-            purpose="Audit and closure",
-            status="pending",
-            sequence=10
-        )
-        ChecklistItem.objects.create(stage=s10, text="Review inspection & test records", requires_doc=True)
-        ChecklistItem.objects.create(stage=s10, text="Supervisor / QA approval")
+        # NOTE: SOP stages are automatically created by ServiceRequest.save()
+        # using SOPStageTemplate records. No hardcoded stage creation here.
 
     @action(detail=True, methods=["post"], url_path="update_checklist")
     def update_checklist(self, request, request_id=None):

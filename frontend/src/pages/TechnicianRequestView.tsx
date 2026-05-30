@@ -68,7 +68,7 @@ export default function TechnicianRequests() {
 
   useEffect(() => {
     fetchRequests();
-  }, [navigate]);
+  }, []); // remove navigate from dep array — it never changes
 
   // --- HANDLE CHECKLIST TOGGLE ---
   const handleChecklistToggle = async (stageId: number, item: any, currentCompletedState: boolean) => {
@@ -98,17 +98,16 @@ export default function TechnicianRequests() {
 
       if (response.ok) {
         toast.success("Checklist updated successfully");
-        await fetchRequests();
-        
-        const freshDataResponse = await fetch(`${API_BASE_URL}/operations/requests/`, {
+        // Refresh only the selected request, not the entire list
+        const freshRes = await fetch(`${API_BASE_URL}/operations/requests/${selectedRequest.request_id}/`, {
           headers: { "Authorization": `Token ${token}` }
         });
-        const freshData = await freshDataResponse.json();
-        const freshRequests = Array.isArray(freshData) ? freshData : (freshData.results || []);
-        const freshSelected = freshRequests.find((r: any) => r.request_id === selectedRequest.request_id);
-        
-        if (freshSelected) {
+        if (freshRes.ok) {
+          const freshSelected = await freshRes.json();
           setSelectedRequest(freshSelected);
+          setRequests((prev: any[]) =>
+            prev.map((r) => r.request_id === freshSelected.request_id ? freshSelected : r)
+          );
         }
       } else {
         toast.error("Failed to update checklist item");
@@ -144,16 +143,17 @@ export default function TechnicianRequests() {
 
       if (response.ok) {
         toast.success("File uploaded successfully");
-        await fetchRequests();
-        
-        const freshDataResponse = await fetch(`${API_BASE_URL}/operations/requests/`, {
+        // Refresh only the selected request
+        const freshRes = await fetch(`${API_BASE_URL}/operations/requests/${selectedRequest.request_id}/`, {
           headers: { "Authorization": `Token ${token}` }
         });
-        const freshData = await freshDataResponse.json();
-        const freshRequests = Array.isArray(freshData) ? freshData : (freshData.results || []);
-        const freshSelected = freshRequests.find((r: any) => r.request_id === selectedRequest.request_id);
-        
-        if (freshSelected) setSelectedRequest(freshSelected);
+        if (freshRes.ok) {
+          const freshSelected = await freshRes.json();
+          setSelectedRequest(freshSelected);
+          setRequests((prev: any[]) =>
+            prev.map((r) => r.request_id === freshSelected.request_id ? freshSelected : r)
+          );
+        }
       } else {
         toast.error("Failed to upload file");
       }

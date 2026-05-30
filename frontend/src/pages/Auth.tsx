@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldCheck, Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
+import { ShieldCheck, Mail, Lock, User, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { API_BASE_URL } from "@/lib/api";
@@ -10,56 +10,133 @@ import trinityLogo from "@/assets/trinity-house-logo.png"; // Make sure this pat
 
 export default function Auth() {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true);
+  // View states: 'login', 'register', 'forgot_email', 'forgot_otp'
+  const [viewState, setViewState] = useState<'login' | 'register' | 'forgot_email' | 'forgot_otp'>('login');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const [formData, setFormData] = useState({
     username: "",
     email: "",
     password: "",
+    otp: "",
+    newPassword: "",
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLoginRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+    setSuccessMsg("");
 
-    const endpoint = isLogin ? "/setups/auth/login/" : "/setups/auth/register/";
+    const endpoint = viewState === 'login' ? "/setups/auth/login/" : "/setups/auth/register/";
     
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password
+        }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // 🌟 FIXED: Changed 'response.token' to 'data.token' to resolve the TS(2339) property error
-        if (data.token) {
-          localStorage.setItem("token", data.token);
-        }
-        
-        if (data.user) {
-          localStorage.setItem("user", JSON.stringify(data.user));
-          
-          // 🚦 THE REDIRECT SPLIT: Send users where they belong based on their role
-          if (data.user.is_superuser) {
-            navigate("/dashboard"); // Admin goes to Admin Command Center
-          } else {
-            navigate("/technician/requests"); // Technician goes to their assigned task dashboard
-          }
+        if (viewState === 'register') {
+          // Registration requires admin approval
+          setSuccessMsg(data.message || "Registration successful. Please wait for an administrator to approve your account.");
+          // Clear form
+          setFormData(prev => ({...prev, password: ""}));
+          // Let them read the message before navigating or just stay on login
+          setTimeout(() => {
+            setViewState('login');
+            setSuccessMsg("");
+          }, 4000);
         } else {
-          setError("User details missing from server response.");
+          // Login successful
+          if (data.token) {
+            localStorage.setItem("token", data.token);
+          }
+          if (data.user) {
+            localStorage.setItem("user", JSON.stringify(data.user));
+            if (data.user.is_superuser) {
+              navigate("/dashboard");
+            } else {
+              navigate("/technician/requests");
+            }
+          }
         }
       } else {
         setError(data.error || data.detail || "Authentication failed. Please try again.");
+      }
+    } catch (err) {
+      setError("Network error. Please check your connection.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+    setSuccessMsg("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/setups/auth/forgot-password/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: formData.email }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMsg(data.message || "OTP sent to your email.");
+        setViewState('forgot_otp');
+      } else {
+        setError(data.error || "Failed to send OTP.");
+      }
+    } catch (err) {
+      setError("Network error. Please check your connection.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+    setSuccessMsg("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/setups/auth/reset-password/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email: formData.email, 
+          otp: formData.otp, 
+          new_password: formData.newPassword 
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setSuccessMsg("Password reset successfully. You can now log in.");
+        setTimeout(() => {
+          setViewState('login');
+          setSuccessMsg("");
+        }, 3000);
+      } else {
+        setError(data.error || "Failed to reset password.");
       }
     } catch (err) {
       setError("Network error. Please check your connection.");
@@ -119,10 +196,14 @@ export default function Auth() {
             className="bg-white p-8 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100"
           >
             <h2 className="text-2xl font-black uppercase tracking-tight text-slate-900 mb-2">
-              {isLogin ? "Welcome Back" : "Create Account"}
+              {viewState === 'login' ? "Welcome Back" : 
+               viewState === 'register' ? "Create Account" : 
+               viewState === 'forgot_email' ? "Recover Password" : "Reset Password"}
             </h2>
             <p className="text-slate-500 font-medium text-sm mb-8">
-              {isLogin ? "Enter your credentials to access the dashboard." : "Register to get access to the command center."}
+              {viewState === 'login' ? "Enter your credentials to access the dashboard." : 
+               viewState === 'register' ? "Register to get access to the command center." : 
+               viewState === 'forgot_email' ? "Enter your email to receive a recovery OTP." : "Enter the OTP sent to your email and your new password."}
             </p>
 
             {error && (
@@ -130,85 +211,174 @@ export default function Auth() {
                 {error}
               </div>
             )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              
-              <div className="space-y-1 relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
-                <Input 
-                  name="username"
-                  placeholder="Username" 
-                  value={formData.username}
-                  onChange={handleChange}
-                  className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
-                  required
-                />
+            {successMsg && (
+              <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm font-bold mb-6 border border-green-100 flex items-center">
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                {successMsg}
               </div>
+            )}
 
-              <AnimatePresence mode="popLayout">
-                {!isLogin && (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }} 
-                    animate={{ opacity: 1, height: "auto" }} 
-                    exit={{ opacity: 0, height: 0 }}
-                    className="space-y-1 relative"
-                  >
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
-                    <Input 
-                      name="email"
-                      type="email"
-                      placeholder="Email Address" 
-                      value={formData.email}
-                      onChange={handleChange}
-                      className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
-                      required={!isLogin}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div className="space-y-1 relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
-                <Input 
-                  name="password"
-                  type="password"
-                  placeholder="Password" 
-                  value={formData.password}
-                  onChange={handleChange}
-                  className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
-                  required
-                />
-              </div>
-
-              {isLogin && (
-                <div className="flex justify-end pt-1">
-                  <a href="#" className="text-xs font-bold text-red-600 hover:text-red-700 transition-colors">
-                    Forgot Password?
-                  </a>
+            {/* Form dynamically switches based on viewState */}
+            {viewState === 'login' || viewState === 'register' ? (
+              <form onSubmit={handleLoginRegister} className="space-y-4">
+                <div className="space-y-1 relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                  <Input 
+                    name="username"
+                    placeholder="Username" 
+                    value={formData.username}
+                    onChange={handleChange}
+                    className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
+                    required
+                  />
                 </div>
-              )}
 
-              <Button 
-                type="submit" 
-                disabled={isLoading}
-                className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold uppercase tracking-wide mt-4 flex items-center justify-center"
-              >
-                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLogin ? "Sign In" : "Register")}
-                {!isLoading && <ArrowRight className="w-4 h-4 ml-2" />}
-              </Button>
-            </form>
+                <AnimatePresence mode="popLayout">
+                  {viewState === 'register' && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }} 
+                      animate={{ opacity: 1, height: "auto" }} 
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-1 relative"
+                    >
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                      <Input 
+                        name="email"
+                        type="email"
+                        placeholder="Email Address" 
+                        value={formData.email}
+                        onChange={handleChange}
+                        className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
+                        required={viewState === 'register'}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-            <div className="mt-8 text-center">
-              <p className="text-sm text-slate-500 font-medium">
-                {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-                <button 
-                  onClick={() => { setIsLogin(!isLogin); setError(""); }}
-                  className="text-red-600 font-bold hover:text-red-700 transition-colors uppercase ml-1"
+                <div className="space-y-1 relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                  <Input 
+                    name="password"
+                    type="password"
+                    placeholder="Password" 
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
+                    required
+                  />
+                </div>
+
+                {viewState === 'login' && (
+                  <div className="flex justify-end pt-1">
+                    <button type="button" onClick={() => {setViewState('forgot_email'); setError(""); setSuccessMsg("");}} className="text-xs font-bold text-red-600 hover:text-red-700 transition-colors">
+                      Forgot Password?
+                    </button>
+                  </div>
+                )}
+
+                <Button 
+                  type="submit" 
+                  disabled={isLoading}
+                  className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold uppercase tracking-wide mt-4 flex items-center justify-center"
                 >
-                  {isLogin ? "Create One" : "Sign In"}
-                </button>
-              </p>
-            </div>
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (viewState === 'login' ? "Sign In" : "Register")}
+                  {!isLoading && <ArrowRight className="w-4 h-4 ml-2" />}
+                </Button>
+              </form>
+            ) : viewState === 'forgot_email' ? (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="space-y-1 relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                  <Input 
+                    name="email"
+                    type="email"
+                    placeholder="Email Address" 
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
+                    required
+                  />
+                </div>
+                <Button 
+                  type="submit" 
+                  disabled={isLoading}
+                  className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold uppercase tracking-wide mt-4 flex items-center justify-center"
+                >
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Send OTP"}
+                </Button>
+                <div className="text-center pt-2">
+                  <button type="button" onClick={() => setViewState('login')} className="text-sm font-bold text-slate-500 hover:text-slate-700">
+                    Back to Login
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                 <div className="space-y-1 relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                  <Input 
+                    name="email"
+                    type="email"
+                    placeholder="Email Address" 
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
+                    required
+                    readOnly
+                  />
+                </div>
+                <div className="space-y-1 relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                  <Input 
+                    name="otp"
+                    type="text"
+                    placeholder="6-Digit OTP" 
+                    value={formData.otp}
+                    onChange={handleChange}
+                    className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
+                    required
+                  />
+                </div>
+                <div className="space-y-1 relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 z-10" />
+                  <Input 
+                    name="newPassword"
+                    type="password"
+                    placeholder="New Password" 
+                    value={formData.newPassword}
+                    onChange={handleChange}
+                    className="pl-10 h-12 bg-slate-50 border-slate-200 focus:bg-white"
+                    required
+                  />
+                </div>
+                <Button 
+                  type="submit" 
+                  disabled={isLoading}
+                  className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold uppercase tracking-wide mt-4 flex items-center justify-center"
+                >
+                  {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Reset Password"}
+                </Button>
+                <div className="text-center pt-2">
+                  <button type="button" onClick={() => setViewState('login')} className="text-sm font-bold text-slate-500 hover:text-slate-700">
+                    Back to Login
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {(viewState === 'login' || viewState === 'register') && (
+              <div className="mt-8 text-center">
+                <p className="text-sm text-slate-500 font-medium">
+                  {viewState === 'login' ? "Don't have an account?" : "Already have an account?"}{" "}
+                  <button 
+                    onClick={() => { setViewState(viewState === 'login' ? 'register' : 'login'); setError(""); setSuccessMsg(""); }}
+                    className="text-red-600 font-bold hover:text-red-700 transition-colors uppercase ml-1"
+                  >
+                    {viewState === 'login' ? "Create One" : "Sign In"}
+                  </button>
+                </p>
+              </div>
+            )}
           </motion.div>
         </div>
       </div>

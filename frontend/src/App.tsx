@@ -18,6 +18,9 @@ import RoleBaseAccessPage from "./pages/RoleBaseAccess";
 import Auth from "./pages/Auth"; 
 import TechnicianDashboard from "@/pages/TechnicianDashboard"; 
 import TechnicianRequestView from "@/pages/TechnicianRequestView";
+import Profile from "@/pages/Profile";
+import AIAssistantPage from "@/pages/AIAssistant";
+import AdminApprovals from "@/pages/AdminApprovals";
 
 const queryClient = new QueryClient();
 
@@ -50,12 +53,15 @@ const RoleGuard = ({ children, requireAdmin }: { children: JSX.Element, requireA
   return children;
 };
 
+import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
+
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+  <GlobalErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
         <Routes>
           {/* PUBLIC ROUTE */}
           <Route path="/login" element={<Auth />} />
@@ -71,10 +77,15 @@ const App = () => (
           <Route path="/dashboard" element={<RoleGuard requireAdmin={true}><Dashboard /></RoleGuard>} />
           <Route path="/requests" element={<RoleGuard requireAdmin={true}><Requests /></RoleGuard>} />
           <Route path="/requests/:id" element={<RoleGuard requireAdmin={true}><RequestView /></RoleGuard>} />
+          <Route path="/ai-assistant" element={<RoleGuard requireAdmin={true}><AIAssistantPage /></RoleGuard>} />
+          <Route path="/user-approvals" element={<RoleGuard requireAdmin={true}><AdminApprovals /></RoleGuard>} />
           
           {/* 🔵 TECHNICIAN PROTECTED ROUTES */}
           <Route path="/technician/requests" element={<RoleGuard requireAdmin={false}><TechnicianDashboard /></RoleGuard>} />
           <Route path="/technician/requests/:id" element={<RoleGuard requireAdmin={false}><TechnicianRequestView /></RoleGuard>} />
+          
+          {/* 🟢 COMMON PROTECTED ROUTES */}
+          <Route path="/profile" element={<RoleGuard requireAdmin={false}><Profile /></RoleGuard>} />
           
           {/* CATCH-ALL ROUTE */}
           <Route path="*" element={<NotFound />} />
@@ -82,6 +93,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
+  </GlobalErrorBoundary>
 );
 
 export default App;
