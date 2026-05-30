@@ -1,0 +1,351 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Enterprise Operations Portal Design System
+   Clean, professional light theme with teal/cyan accents
+   Motion-enhanced with scroll animations
+*/
+
+@layer base {
+  :root {
+    /* Core backgrounds */
+    --background: 210 20% 98%;
+    --foreground: 215 25% 15%;
+
+    /* Card surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    /* Popover/dropdown surfaces */
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    /* Primary - Teal/Cyan accent */
+    --primary: 187 72% 38%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 187 72% 32%;
+
+    /* Secondary - Soft slate */
+    --secondary: 210 15% 93%;
+    --secondary-foreground: 215 25% 25%;
+
+    /* Muted surfaces */
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 15% 50%;
+
+    /* Accent - Light teal tint */
+    --accent: 187 50% 95%;
+    --accent-foreground: 187 72% 30%;
+
+    /* Status colors */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --success: 152 69% 40%;
+    --success-foreground: 0 0% 100%;
+    --success-muted: 152 40% 92%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --warning-muted: 38 60% 92%;
+    
+    --danger: 0 72% 51%;
+    --danger-foreground: 0 0% 100%;
+    --danger-muted: 0 50% 95%;
+    
+    --info: 200 90% 50%;
+    --info-foreground: 0 0% 100%;
+    --info-muted: 200 60% 94%;
+
+    /* Borders and inputs */
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 187 72% 38%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar - Clean slate */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 20% 40%;
+    --sidebar-primary: 187 72% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 187 50% 95%;
+    --sidebar-accent-foreground: 187 72% 30%;
+    --sidebar-border: 214 20% 92%;
+    --sidebar-ring: 187 72% 38%;
+
+    /* Chart colors */
+    --chart-1: 187 72% 38%;
+    --chart-2: 152 69% 40%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 262 60% 55%;
+    --chart-5: 0 72% 51%;
+    --chart-6: 200 90% 50%;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(215 20% 50% / 0.05);
+    --shadow: 0 1px 3px 0 hsl(215 20% 50% / 0.1), 0 1px 2px -1px hsl(215 20% 50% / 0.1);
+    --shadow-md: 0 4px 6px -1px hsl(215 20% 50% / 0.1), 0 2px 4px -2px hsl(215 20% 50% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(215 20% 50% / 0.1), 0 4px 6px -4px hsl(215 20% 50% / 0.1);
+    --shadow-xl: 0 20px 25px -5px hsl(215 20% 50% / 0.1), 0 8px 10px -6px hsl(215 20% 50% / 0.1);
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 187 72% 45%;
+    --primary-foreground: 222 47% 8%;
+    --primary-hover: 187 72% 50%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 187 40% 20%;
+    --accent-foreground: 187 72% 60%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --success: 152 50% 35%;
+    --success-foreground: 0 0% 100%;
+    --success-muted: 152 30% 15%;
+    
+    --warning: 38 70% 45%;
+    --warning-foreground: 0 0% 100%;
+    --warning-muted: 38 40% 15%;
+    
+    --danger: 0 50% 40%;
+    --danger-foreground: 0 0% 100%;
+    --danger-muted: 0 40% 15%;
+    
+    --info: 200 70% 45%;
+    --info-foreground: 0 0% 100%;
+    --info-muted: 200 40% 15%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 187 72% 45%;
+    
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 215 20% 65%;
+    --sidebar-primary: 187 72% 45%;
+    --sidebar-primary-foreground: 222 47% 8%;
+    --sidebar-accent: 187 40% 20%;
+    --sidebar-accent-foreground: 187 72% 60%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 187 72% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full hover:bg-muted-foreground/30 transition-colors;
+  }
+}
+
+@layer components {
+  /* KPI Card styles */
+  .kpi-card {
+    @apply relative overflow-hidden rounded-xl bg-card p-6 transition-all duration-300;
+    box-shadow: var(--shadow-md);
+  }
+
+  .kpi-card:hover {
+    box-shadow: var(--shadow-lg);
+    @apply -translate-y-0.5;
+  }
+
+  .kpi-card-gradient {
+    @apply absolute inset-0 opacity-5;
+  }
+
+  /* Status badges */
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .status-safe {
+    @apply bg-success-muted text-success;
+  }
+
+  .status-warning {
+    @apply bg-warning-muted text-warning;
+  }
+
+  .status-danger {
+    @apply bg-danger-muted text-danger;
+  }
+
+  .status-info {
+    @apply bg-info-muted text-info;
+  }
+
+  /* Stage tracker */
+  .stage-completed {
+    @apply bg-success text-success-foreground;
+  }
+
+  .stage-active {
+    @apply bg-primary text-primary-foreground animate-pulse;
+  }
+
+  .stage-pending {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  /* Data table */
+  .data-table {
+    @apply w-full border-collapse;
+  }
+
+  .data-table th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50;
+  }
+
+  .data-table td {
+    @apply px-4 py-3 text-sm border-b border-border;
+  }
+
+  .data-table tr:hover td {
+    @apply bg-muted/30;
+  }
+
+  /* Filter bar */
+  .filter-bar {
+    @apply flex flex-wrap items-center gap-3 p-4 bg-card rounded-xl;
+    box-shadow: var(--shadow);
+  }
+
+  /* Sidebar nav item */
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200;
+    @apply text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+  }
+
+  .nav-item.active {
+    @apply bg-sidebar-accent text-sidebar-primary font-semibold;
+  }
+
+  /* Chart container */
+  .chart-container {
+    @apply bg-card rounded-xl p-6;
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Animated gradient background */
+  .gradient-bg {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary) / 0.05) 0%,
+      hsl(var(--accent) / 0.3) 50%,
+      hsl(var(--success) / 0.05) 100%
+    );
+  }
+}
+
+@layer utilities {
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Custom shadows */
+  .shadow-soft {
+    box-shadow: var(--shadow);
+  }
+
+  .shadow-soft-md {
+    box-shadow: var(--shadow-md);
+  }
+
+  .shadow-soft-lg {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .shadow-soft-xl {
+    box-shadow: var(--shadow-xl);
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-md;
+  }
+
+  /* Status colors as utilities */
+  .bg-success {
+    background-color: hsl(var(--success));
+  }
+
+  .text-success {
+    color: hsl(var(--success));
+  }
+
+  .bg-success-muted {
+    background-color: hsl(var(--success-muted));
+  }
+
+  .bg-warning {
+    background-color: hsl(var(--warning));
+  }
+
+  .text-warning {
+    color: hsl(var(--warning));
+  }
+
+  .bg-warning-muted {
+    background-color: hsl(var(--warning-muted));
+  }
+
+  .bg-danger {
+    background-color: hsl(var(--danger));
+  }
+
+  .text-danger {
+    color: hsl(var(--danger));
+  }
+
+  .bg-danger-muted {
+    background-color: hsl(var(--danger-muted));
+  }
+
+  .bg-info {
+    background-color: hsl(var(--info));
+  }
+
+  .text-info {
+    color: hsl(var(--info));
+  }
+
+  .bg-info-muted {
+    background-color: hsl(var(--info-muted));
+  }
+}
