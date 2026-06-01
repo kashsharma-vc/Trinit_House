@@ -43,12 +43,14 @@ export default function Setup() {
   const [liveFeatures, setLiveFeatures] = useState<any[]>([]);
   const [liveSOPStages, setLiveSOPStages] = useState<any[]>([]);
   const [liveChecklists, setLiveChecklists] = useState<any[]>([]);
+  const [liveRoles, setLiveRoles] = useState<any[]>([]);
 
   // --- 2. REUSABLE FETCH FUNCTION ---
   const fetchData = async () => {    
     try {      
       const headers = { "Authorization": `Token ${localStorage.getItem('token')}` };
-      const [compRes, catRes, zoneRes, wsRes, modRes, featRes, sopRes, chkRes] = await Promise.all([        
+      const [roleRes, compRes, catRes, zoneRes, wsRes, modRes, featRes, sopRes, chkRes] = await Promise.all([        
+        fetch(`${API_BASE_URL}/setups/roles/`, { headers }),
         fetch(`${API_BASE_URL}/setups/compressors/`, { headers }),        
         fetch(`${API_BASE_URL}/setups/categories/`, { headers }),        
         fetch(`${API_BASE_URL}/setups/zones/`, { headers }),        
@@ -59,6 +61,7 @@ export default function Setup() {
         fetch(`${API_BASE_URL}/setups/checklist-templates/`, { headers })
       ]);      
 
+      const roleData = await roleRes.json();
       const compData = await compRes.json();      
       const catData = await catRes.json();      
       const zoneData = await zoneRes.json();      
@@ -69,6 +72,7 @@ export default function Setup() {
       const chkData = await chkRes.json();
 
       // Safely extract arrays      
+      const rawRoles = Array.isArray(roleData) ? roleData : (roleData.results || []);
       const rawCompressors = Array.isArray(compData) ? compData : (compData.results || []);      
       const rawCategories = Array.isArray(catData) ? catData : (catData.results || []);      
       const rawZones = Array.isArray(zoneData) ? zoneData : (zoneData.results || []);      
@@ -77,6 +81,14 @@ export default function Setup() {
       const rawFeatures = Array.isArray(featData) ? featData : (featData.results || []);      
       const rawSOP = Array.isArray(sopData) ? sopData : (sopData.results || []);      
       const rawChk = Array.isArray(chkData) ? chkData : (chkData.results || []);      
+
+      setLiveRoles(rawRoles.map((r: any) => ({
+        id: r.id,
+        roleName: r.role_name,
+        description: r.description || "",
+        status: r.status || "Active",
+        createdOn: r.created_on ? r.created_on.substring(0, 10) : "",
+      })));
 
       // MAP 1: Categories      
       setLiveCategories(rawCategories.map((c: any) => ({        
@@ -172,7 +184,7 @@ export default function Setup() {
 
   // --- 3. DYNAMIC DELETE FUNCTION ---
   const handleDelete = async (collection: string, id: string, name: string) => {    
-    const isLiveEndpoint = ['zones', 'workshops', 'categories', 'compressors', 'app-features', 'sop-templates', 'checklist-templates'].includes(collection);
+    const isLiveEndpoint = ['roles', 'zones', 'workshops', 'categories', 'compressors', 'app-features', 'sop-templates', 'checklist-templates'].includes(collection);
 
     if (isLiveEndpoint) {
       try {
@@ -197,7 +209,7 @@ export default function Setup() {
       return;    
     }    
 
-    const isLiveEndpoint = ['zones', 'workshops', 'categories', 'compressors', 'app-features', 'sop-templates', 'checklist-templates'].includes(collection);
+    const isLiveEndpoint = ['roles', 'zones', 'workshops', 'categories', 'compressors', 'app-features', 'sop-templates', 'checklist-templates'].includes(collection);
     
     // Convert boolean toggles to Active/Inactive strings if needed
     const statusVal = data.status === true || data.status === 'Active' ? 'Active' : 'Inactive';
@@ -210,7 +222,9 @@ export default function Setup() {
 
       // Map Frontend camelCase data to Django snake_case
       let payload: any = {};
-      if (collection === 'zones') {
+      if (collection === 'roles') {
+        payload = { role_name: data.roleName, description: data.description, status: statusVal };
+      } else if (collection === 'zones') {
         payload = { zone_name: data.zoneName, description: data.description, status: statusVal };
       } else if (collection === 'workshops') {
         payload = { workshop_name: data.workshopName, zone: data.zoneId, location: data.location, capacity: Number(data.capacity), default_sla: Number(data.defaultSLA), status: statusVal };
@@ -296,7 +310,7 @@ export default function Setup() {
           <>            
             <MasterList              
               title="Roles & Permissions"              
-              data={store.roles}              
+              data={liveRoles}              
               columns={[                
                 { key: 'roleName', label: 'Role Name', sortable: true },                
                 { key: 'description', label: 'Description' },                
