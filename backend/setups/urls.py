@@ -26,12 +26,15 @@ router.register(r'sop-templates', SOPStageTemplateViewSet, basename='sop-templat
 router.register(r'checklist-templates', ChecklistTemplateViewSet, basename='checklist-templates')
 router.register(r'users', UserViewSet, basename='users')
 
+from .sso_views import VibeConnectSSOCallbackView
+
 urlpatterns = [
     path('', include(router.urls)),
     path('auth/login/', LoginView.as_view(), name='auth_login'),
     path('auth/register/', RegisterView.as_view(), name='auth_register'),
     path('auth/forgot-password/', ForgotPasswordView.as_view(), name='auth_forgot_password'),
     path('auth/reset-password/', VerifyOTPAndResetPasswordView.as_view(), name='auth_reset_password'),
+    path('auth/sso/callback/', VibeConnectSSOCallbackView.as_view(), name='auth_sso_callback'),
     path('profile/update/', views.ProfileUpdateView.as_view(), name='profile_update'),
     path('technicians/', views.TechnicianListView.as_view(), name='technician-list'),
 ]

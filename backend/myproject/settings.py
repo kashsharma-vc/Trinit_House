@@ -165,3 +165,18 @@ CORS_ALLOWED_ORIGINS = [
     "http://192.168.1.21:8080",
 ]
 CORS_ALLOW_ALL_ORIGINS = True
+
+# ─── VibeConnect SSO Settings ───────────────────────────────────────────────
+VIBECONNECT_SSO_ENABLED = os.getenv("VIBECONNECT_SSO_ENABLED", "False").lower() in ("true", "1", "yes")
+VIBECONNECT_CLIENT_ID = os.getenv("VIBECONNECT_CLIENT_ID", "")
+VIBECONNECT_CLIENT_SECRET = os.getenv("VIBECONNECT_CLIENT_SECRET", "")
+VIBECONNECT_VALIDATE_URL = os.getenv("VIBECONNECT_VALIDATE_URL", "")
+VIBECONNECT_EXPECTED_ISSUER = os.getenv("VIBECONNECT_EXPECTED_ISSUER", "")
+VIBECONNECT_SSO_TIMEOUT = float(os.getenv("VIBECONNECT_SSO_TIMEOUT", "5.0"))
+VIBECONNECT_DEMO_USERNAME = os.getenv("VIBECONNECT_DEMO_USERNAME", "demo_user")
+
+# Production security check for SSO URL
+if not DEBUG and VIBECONNECT_SSO_ENABLED:
+    if VIBECONNECT_VALIDATE_URL and not VIBECONNECT_VALIDATE_URL.startswith("https://"):
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("VIBECONNECT_VALIDATE_URL must use HTTPS in production.")

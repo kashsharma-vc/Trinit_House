@@ -21,6 +21,7 @@ import TechnicianRequestView from "@/pages/TechnicianRequestView";
 import Profile from "@/pages/Profile";
 import AIAssistantPage from "@/pages/AIAssistant";
 import AdminApprovals from "@/pages/AdminApprovals";
+import SSOCallback from "@/pages/SSOCallback";
 
 const queryClient = new QueryClient();
 
@@ -65,6 +66,7 @@ const App = () => (
         <Routes>
           {/* PUBLIC ROUTE */}
           <Route path="/login" element={<Auth />} />
+          <Route path="/sso/callback" element={<SSOCallback />} />
           <Route path="/" element={<Navigate to="/login" replace />} />
           
           {/* 🔴 ADMIN ONLY PROTECTED ROUTES */}
